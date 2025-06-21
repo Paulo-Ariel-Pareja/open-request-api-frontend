@@ -1,17 +1,10 @@
-import React from 'react';
-import { Menu, Globe, Download, Upload, Settings } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { Menu, Globe } from "lucide-react";
+import { useApp } from "../../contexts/AppContext";
 
 export function Header() {
-  const { sidebarCollapsed, setSidebarCollapsed, activeEnvironments, requests, collections, environments } = useApp();
+  const { sidebarCollapsed, setSidebarCollapsed, activeEnvironments } =
+    useApp();
 
-  const exportData = () => {
-    return JSON.stringify({
-      requests,
-      collections,
-      environments,
-    });
-  };
   return (
     <header className="bg-gray-900 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
       <div className="flex items-center space-x-4">
@@ -25,15 +18,23 @@ export function Header() {
           <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-lg flex items-center justify-center">
             <Globe size={16} className="text-white" />
           </div>
-          <span>API Tester</span>
+          <span>Open Request API</span>
         </h1>
       </div>
 
       <div className="flex items-center space-x-4">
         {activeEnvironments.length > 0 && (
           <div className="flex items-center space-x-2">
-            {activeEnvironments.map((env, index) => (
-              <div key={env._id} className="flex items-center space-x-2 px-3 py-1 bg-green-500/20 border border-green-500/30 rounded-lg">
+            <div className="flex items-center space-x-2 px-3 py-1">
+              <span className="text-green-400 text-sm font-medium">
+                Environments activated:
+              </span>
+            </div>
+            {activeEnvironments.map((env) => (
+              <div
+                key={env._id}
+                className="flex items-center space-x-2 px-3 py-1 bg-green-500/20 border border-green-500/30 rounded-lg"
+              >
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                 <span className="text-green-400 text-sm font-medium">
                   {env.name}
