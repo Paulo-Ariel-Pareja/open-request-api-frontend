@@ -1,7 +1,7 @@
 import { Schedule, ScheduleExecution } from '../types';
 
 class StorageService {
-  private prefix = 'postman_clone_';
+  private prefix = 'open_request_api_';
 
   // Schedules (localStorage only)
   saveSchedule(schedule: Schedule): void {

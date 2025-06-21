@@ -1,4 +1,4 @@
-import { Schedule, Collection, HttpRequest, ScheduleExecution, Environment, CollectionFull } from '../types';
+import { Schedule, ScheduleExecution, Environment } from '../types';
 import { storageService } from './storage';
 import { requestService } from './request';
 import { apiService } from './api';
@@ -7,6 +7,12 @@ class ScheduleService {
   private runningSchedules = new Map<string, NodeJS.Timeout>();
   private onExecutionUpdate?: (execution: ScheduleExecution) => void;
   private onScheduleUpdate?: (schedule: Schedule) => void;
+  private activeEnvironments: Environment[] = [];
+
+  setActiveEnvironmentsForSchedule(environments: Environment[]) {
+    console.log('env active: ', environments);
+    this.activeEnvironments = environments;
+  }
 
   setExecutionUpdateCallback(callback: (execution: ScheduleExecution) => void) {
     this.onExecutionUpdate = callback;
@@ -54,20 +60,12 @@ class ScheduleService {
     };
 
     try {
-      // Get collections and environments from API
-      const allCollections = await apiService.getCollections();
-      const environments = await apiService.getEnvironments();
-      const activeEnvironments = environments.filter(env => env.isActive);
+      const activeEnvironments = this.activeEnvironments
 
-      // Filter collections for this schedule
-      const scheduleCollections = allCollections.filter(c => 
-        schedule.collections.includes(c._id)
-      );
-
-      for (const collection of scheduleCollections) {
+      for (const collectionId of schedule.collections) {
         const collectionExecution = {
-          id: collection._id,
-          name: collection.name,
+          id: collectionId,
+          name: 'loading...',
           status: 'success' as 'success' | 'error',
           requests: [] as Array<{
             id: string;
@@ -80,8 +78,9 @@ class ScheduleService {
 
         try {
           // Get collection details with requests
-          const collectionDetails = await apiService.getCollectionById(collection._id);
-
+          const collectionDetails = await apiService.getCollectionById(collectionId);
+          // Rename name on collectionExecution
+          collectionExecution.name = collectionDetails.name;
           // Execute all requests in the collection
           for (const request of collectionDetails.requests) {
             execution.totalRequests++;
@@ -114,7 +113,7 @@ class ScheduleService {
           }
         } catch (error) {
           collectionExecution.status = 'error';
-          console.error(`Error loading collection ${collection._id}:`, error);
+          console.error(`Error loading collection ${collectionId}:`, error);
         }
 
         execution.collections.push(collectionExecution);

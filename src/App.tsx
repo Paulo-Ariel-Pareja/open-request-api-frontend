@@ -1,4 +1,3 @@
-import React from 'react';
 import { AppProvider } from './contexts/AppContext';
 import { Header } from './components/Layout/Header';
 import { Sidebar } from './components/Layout/Sidebar';

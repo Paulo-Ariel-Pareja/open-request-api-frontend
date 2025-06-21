@@ -51,7 +51,10 @@ interface AppContextType {
   deleteCollection: (collectionId: string) => Promise<void>;
   saveRequest: (
     collectionId: string,
-    request: Omit<HttpRequest, "_id" | "createdAt" | "updatedAt" | "collectionId">
+    request: Omit<
+      HttpRequest,
+      "_id" | "createdAt" | "updatedAt" | "collectionId"
+    >
   ) => Promise<HttpRequest>;
   updateRequest: (
     collectionId: string,
@@ -67,6 +70,11 @@ interface AppContextType {
     environmentId: string,
     updates: Omit<Environment, "_id" | "isActive" | "createdAt">
   ) => Promise<Environment>;
+  updateEnvironmentVariable: (
+    environmentId: string,
+    key: string,
+    value: string
+  ) => void;
   deleteEnvironment: (environmentId: string) => Promise<void>;
 }
 
@@ -114,6 +122,7 @@ export function AppProvider({ children }: AppProviderProps) {
   useEffect(() => {
     const activeEnvs = environments.filter((env) => env.isActive);
     setActiveEnvironments(activeEnvs);
+    scheduleService.setActiveEnvironmentsForSchedule(activeEnvs);
   }, [environments]);
 
   // Data operations
@@ -239,7 +248,10 @@ export function AppProvider({ children }: AppProviderProps) {
 
   const saveRequest = async (
     collectionId: string,
-    request: Omit<HttpRequest, "_id" | "createdAt" | "updatedAt" | "collectionId">
+    request: Omit<
+      HttpRequest,
+      "_id" | "createdAt" | "updatedAt" | "collectionId"
+    >
   ): Promise<HttpRequest> => {
     try {
       const newRequest = await apiService.createRequest(collectionId, request);
@@ -388,6 +400,33 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   };
 
+  const updateEnvironmentVariable = (
+    environmentId: string,
+    key: string,
+    value: string
+  ) => {
+    console.log(
+      `Updating environment variable: ${key} = ${value} in environment ${environmentId}`
+    );
+
+    setEnvironments((prev) =>
+      prev.map((env) => {
+        if (env._id === environmentId) {
+          const updatedEnv = {
+            ...env,
+            variables: {
+              ...env.variables,
+              [key]: value,
+            },
+          };
+          console.log(`Environment ${env.name} updated:`, updatedEnv.variables);
+          return updatedEnv;
+        }
+        return env;
+      })
+    );
+  };
+
   const deleteEnvironment = async (environmentId: string): Promise<void> => {
     try {
       await apiService.deleteEnvironment(environmentId);
@@ -441,6 +480,7 @@ export function AppProvider({ children }: AppProviderProps) {
         saveEnvironment,
         toggleEnvironmentOnCache,
         updateEnvironment,
+        updateEnvironmentVariable,
         deleteEnvironment,
       }}
     >
