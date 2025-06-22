@@ -41,8 +41,8 @@ class StorageService {
     const executions = this.getScheduleExecutions();
     executions.unshift(execution); // Add to beginning for chronological order
 
-    // Keep only last 4 executions to prevent storage bloat
-    const trimmedExecutions = executions.slice(0, 4);
+    // Keep only last 100 executions to prevent storage bloat
+    const trimmedExecutions = executions.slice(0, 100);
 
     localStorage.setItem(
       `${this.prefix}schedule_executions`,
