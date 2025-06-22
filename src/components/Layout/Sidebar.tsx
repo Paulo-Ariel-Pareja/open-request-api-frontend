@@ -5,9 +5,6 @@ import {
   Search,
   Globe,
   Clock,
-  ChevronDown,
-  ChevronRight,
-  MoreVertical,
   Edit,
   Trash2,
   CheckCircle,
@@ -20,7 +17,10 @@ import {
 } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import { useStorage } from "../../hooks/useStorage";
-import { HttpRequest, Collection, Schedule, Environment } from "../../types";
+import { Collection, Schedule, Environment } from "../../types";
+import { CollectionItem } from "./Collection/CollectionItem";
+import { CollectionModal } from "./Collection/CollectionModal";
+import { RequestModal } from "./Request/RequestModal";
 
 export function Sidebar() {
   const {
@@ -61,7 +61,13 @@ export function Sidebar() {
   const [expandedSchedules, setExpandedSchedules] = useState<Set<string>>(
     new Set()
   );
+
+  // Modals and forms state
+  // Collection
   const [showNewCollectionForm, setShowNewCollectionForm] = useState(false);
+  
+
+  // Request
   const [showNewRequestForm, setShowNewRequestForm] = useState<string | null>(
     null
   );
@@ -72,17 +78,17 @@ export function Sidebar() {
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
 
   // Collection form state
-  const [newCollection, setNewCollection] = useState({
+/*   const [newCollection, setNewCollection] = useState({
     name: "",
     description: "",
-  });
+  }); */
 
   // Request form state
-  const [newRequest, setNewRequest] = useState({
+/*   const [newRequest, setNewRequest] = useState({
     name: "",
     method: "GET" as const,
     url: "",
-  });
+  }); */
 
   // Environment form state
   const [environmentForm, setEnvironmentForm] = useState({
@@ -162,7 +168,7 @@ export function Sidebar() {
     setExpandedSchedules(newExpanded);
   };
 
-  const handleCreateCollection = async (e: React.FormEvent) => {
+/*   const handleCreateCollection = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await saveCollection(newCollection);
@@ -171,9 +177,9 @@ export function Sidebar() {
     } catch (error) {
       console.error("Error creating collection:", error);
     }
-  };
+  }; */
 
-  const handleCreateRequest = async (e: React.FormEvent) => {
+/*   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showNewRequestForm) return;
 
@@ -193,7 +199,7 @@ export function Sidebar() {
     } catch (error) {
       console.error("Error creating request:", error);
     }
-  };
+  }; */
 
   const handleCreateEnvironment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -751,7 +757,13 @@ export function Sidebar() {
       )}
 
       {/* New Collection Form Modal */}
-      {showNewCollectionForm && (
+        <CollectionModal
+        isOpen={showNewCollectionForm}
+        onClose={() => setShowNewCollectionForm(false)}
+        onSave={saveCollection}
+      />
+
+{/*       {showNewCollectionForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-96">
             <h3 className="text-lg font-semibold text-white mb-4">
@@ -810,10 +822,14 @@ export function Sidebar() {
             </form>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* New Request Form Modal */}
-      {showNewRequestForm && (
+     {showNewRequestForm && <RequestModal 
+     collectionId={showNewRequestForm}
+      onClose={() => setShowNewRequestForm(null)}
+      />}
+{/*       {showNewRequestForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-96">
             <h3 className="text-lg font-semibold text-white mb-4">
@@ -892,7 +908,7 @@ export function Sidebar() {
             </form>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Environment Form Modal */}
       {showNewEnvironmentForm && (
@@ -1221,136 +1237,6 @@ export function Sidebar() {
               </div>
             </form>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Collection Item Component
-interface CollectionItemProps {
-  collection: Collection;
-  expanded: boolean;
-  onToggle: () => void;
-  onAddRequest: () => void;
-  onDeleteCollection: () => void;
-  onSelectRequest: (request: HttpRequest) => void;
-  onDeleteRequest: (collectionId: string, requestId: string) => void;
-}
-
-function CollectionItem({
-  collection,
-  expanded,
-  onToggle,
-  onAddRequest,
-  onDeleteCollection,
-  onSelectRequest,
-  onDeleteRequest,
-}: CollectionItemProps) {
-  const { collectionDetails, loadCollectionDetails } = useApp();
-  const [showMenu, setShowMenu] = useState(false);
-
-  const details = collectionDetails.get(collection._id);
-
-  useEffect(() => {
-    if (expanded && !details) {
-      loadCollectionDetails(collection._id);
-    }
-  }, [expanded, details, collection._id, loadCollectionDetails]);
-
-  return (
-    <div className="mb-2">
-      <div className="flex items-center justify-between p-2 hover:bg-gray-700 rounded-lg group">
-        <div className="flex items-center space-x-2 flex-1" onClick={onToggle}>
-          <button className="text-gray-400 hover:text-gray-300">
-            {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          </button>
-          <Folder size={16} className="text-cyan-400" />
-          <div className="flex-1">
-            <div className="text-white text-sm font-medium">
-              {collection.name}
-            </div>
-            <div className="text-gray-400 text-xs">
-              {collection.size} requests
-            </div>
-          </div>
-        </div>
-        <div className="relative">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu(!showMenu);
-            }}
-            className="p-1 text-gray-400 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <MoreVertical size={16} />
-          </button>
-          {showMenu && (
-            <div className="absolute right-0 top-8 bg-gray-700 border border-gray-600 rounded-lg shadow-lg z-10 min-w-[120px]">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddRequest();
-                  setShowMenu(false);
-                }}
-                className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-600 flex items-center space-x-2"
-              >
-                <Plus size={14} />
-                <span>Add Request</span>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteCollection();
-                  setShowMenu(false);
-                }}
-                className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-gray-600 flex items-center space-x-2"
-              >
-                <Trash2 size={14} />
-                <span>Delete</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {expanded && details && (
-        <div className="ml-6 space-y-1">
-          {details.requests.map((request) => (
-            <div
-              key={request._id}
-              className="flex items-center justify-between p-2 hover:bg-gray-700 rounded group cursor-pointer"
-              onClick={() => onSelectRequest(request)}
-            >
-              <div className="flex items-center space-x-2">
-                <span
-                  className={`px-2 py-1 text-xs font-mono rounded ${
-                    request.method === "GET"
-                      ? "bg-green-500/20 text-green-400"
-                      : request.method === "POST"
-                      ? "bg-blue-500/20 text-blue-400"
-                      : request.method === "PUT"
-                      ? "bg-orange-500/20 text-orange-400"
-                      : request.method === "DELETE"
-                      ? "bg-red-500/20 text-red-400"
-                      : "bg-gray-500/20 text-gray-400"
-                  }`}
-                >
-                  {request.method}
-                </span>
-                <span className="text-white text-sm">{request.name}</span>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteRequest(collection._id, request._id);
-                }}
-                className="p-1 text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
         </div>
       )}
     </div>
