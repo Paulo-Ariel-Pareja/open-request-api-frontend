@@ -34,15 +34,10 @@ export function Sidebar() {
     environmentsLoading,
     loadCollectionDetails,
     setActiveRequest,
-    // saveCollection,
-    deleteCollection, // se elimina desde el sidebar, no desde el modal
-    //saveRequest,
-    deleteRequest, // se elimina desde el sidebar, no desde el modal
-    // saveEnvironment,
-    // updateEnvironment,
-    deleteEnvironment, // se elimina desde el sidebar, no desde el modal
+    deleteCollection,
+    deleteRequest,
+    deleteEnvironment,
     toggleEnvironmentOnCache,
-    //searchCollections,
   } = useApp();
 
   const {
@@ -62,12 +57,7 @@ export function Sidebar() {
   const [expandedSchedules, setExpandedSchedules] = useState<Set<string>>(
     new Set()
   );
-
-  // Modals and forms state
-  // Collection
   const [showNewCollectionForm, setShowNewCollectionForm] = useState(false);
-
-  // Request
   const [showNewRequestForm, setShowNewRequestForm] = useState<string | null>(
     null
   );
@@ -76,71 +66,6 @@ export function Sidebar() {
   const [editingEnvironment, setEditingEnvironment] =
     useState<Environment | null>(null);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
-
-  // Collection form state
-  /*   const [newCollection, setNewCollection] = useState({
-    name: "",
-    description: "",
-  }); */
-
-  // Request form state
-  /*   const [newRequest, setNewRequest] = useState({
-    name: "",
-    method: "GET" as const,
-    url: "",
-  }); */
-
-  // Environment form state
-  /*   const [environmentForm, setEnvironmentForm] = useState({
-    name: "",
-    variables: [{ key: "", value: "" }],
-  }); */
-
-  // Schedule form state
-/*   const [scheduleForm, setScheduleForm] = useState({
-    name: "",
-    description: "",
-    collections: [] as string[],
-    interval: 60,
-    enabled: true,
-  }); */
-
-  // Collection search for scheduler
-/*   const [collectionSearchQuery, setCollectionSearchQuery] = useState("");
-  const [collectionSearchResults, setCollectionSearchResults] = useState<
-    Collection[]
-  >([]);
-  const [showCollectionSearch, setShowCollectionSearch] = useState(false); */
-
-  // Search functionality
-/*   useEffect(() => {
-    const performSearch = async () => {
-      if (searchQuery.trim()) {
-        const results = await searchCollections(searchQuery);
-        setSearchResults(results);
-      } else {
-        setSearchResults([]);
-      }
-    };
-
-    const debounceTimer = setTimeout(performSearch, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [searchQuery, searchCollections]); */
-
-  // Collection search for scheduler
-/*   useEffect(() => {
-    const performCollectionSearch = async () => {
-      if (collectionSearchQuery.trim()) {
-        const results = await searchCollections(collectionSearchQuery);
-        setCollectionSearchResults(results);
-      } else {
-        setCollectionSearchResults(collections);
-      }
-    };
-
-    const debounceTimer = setTimeout(performCollectionSearch, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [collectionSearchQuery, searchCollections, collections]); */
 
   const toggleCollection = async (collectionId: string) => {
     const newExpanded = new Set(expandedCollections);
@@ -168,211 +93,15 @@ export function Sidebar() {
     setExpandedSchedules(newExpanded);
   };
 
-  /*   const handleCreateCollection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await saveCollection(newCollection);
-      setNewCollection({ name: "", description: "" });
-      setShowNewCollectionForm(false);
-    } catch (error) {
-      console.error("Error creating collection:", error);
-    }
-  }; */
-
-  /*   const handleCreateRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!showNewRequestForm) return;
-
-    try {
-      const savedRequest = await saveRequest(showNewRequestForm, {
-        ...newRequest,
-        headers: {},
-        body: "",
-        bodyType: "none",
-        preScript: "",
-        postScript: "",
-        tests: "",
-      });
-      setActiveRequest(savedRequest);
-      setNewRequest({ name: "", method: "GET", url: "" });
-      setShowNewRequestForm(null);
-    } catch (error) {
-      console.error("Error creating request:", error);
-    }
-  }; */
-
-  /*   const handleCreateEnvironment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const variables: Record<string, string> = {};
-      environmentForm.variables.forEach((variable) => {
-        if (variable.key.trim()) {
-          variables[variable.key] = variable.value;
-        }
-      });
-
-      await saveEnvironment({
-        name: environmentForm.name,
-        variables,
-      });
-
-      setEnvironmentForm({ name: "", variables: [{ key: "", value: "" }] });
-      setShowNewEnvironmentForm(false);
-    } catch (error) {
-      console.error("Error creating environment:", error);
-    }
-  };
- */
-  /*   const handleUpdateEnvironment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingEnvironment) return;
-
-    try {
-      const variables: Record<string, string> = {};
-      environmentForm.variables.forEach((variable) => {
-        if (variable.key.trim()) {
-          variables[variable.key] = variable.value;
-        }
-      });
-
-      await updateEnvironment(editingEnvironment._id, {
-        name: environmentForm.name,
-        variables,
-      });
-
-      setEditingEnvironment(null);
-      setShowNewEnvironmentForm(false);
-      setEnvironmentForm({ name: "", variables: [{ key: "", value: "" }] });
-    } catch (error) {
-      console.error("Error updating environment:", error);
-    }
-  }; */
-
-/*   const handleCreateSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const schedule: Schedule = {
-        id: Date.now().toString(),
-        ...scheduleForm,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      saveSchedule(schedule);
-      setScheduleForm({
-        name: "",
-        description: "",
-        collections: [],
-        interval: 60,
-        enabled: true,
-      });
-      setShowNewScheduleForm(false);
-      setShowCollectionSearch(false);
-      setCollectionSearchQuery("");
-    } catch (error) {
-      console.error("Error creating schedule:", error);
-    }
-  }; */
-
-/*   const handleUpdateSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingSchedule) return;
-
-    try {
-      const updatedSchedule: Schedule = {
-        ...editingSchedule,
-        ...scheduleForm,
-        updatedAt: new Date().toISOString(),
-      };
-
-      saveSchedule(updatedSchedule);
-      setScheduleForm({
-        name: "",
-        description: "",
-        collections: [],
-        interval: 60,
-        enabled: true,
-      });
-      setShowNewScheduleForm(false);
-      setShowCollectionSearch(false);
-      setEditingSchedule(null);
-      setCollectionSearchQuery("");
-    } catch (error) {
-      console.error("Error updating schedule:", error);
-    }
-  }; */
-
   const startEditingEnvironment = (environment: Environment) => {
     setEditingEnvironment(environment);
-    /*     setEnvironmentForm({
-      name: environment.name,
-      variables: Object.entries(environment.variables).map(([key, value]) => ({
-        key,
-        value,
-      })),
-    }); */
     setShowNewEnvironmentForm(true);
   };
 
   const startEditingSchedule = (schedule: Schedule) => {
     setEditingSchedule(schedule);
-/*     setScheduleForm({
-      name: schedule.name,
-      description: schedule.description,
-      collections: schedule.collections,
-      interval: schedule.interval,
-      enabled: schedule.enabled,
-    }); */
     setShowNewScheduleForm(true);
   };
-
-  /*   const addEnvironmentVariable = () => {
-    setEnvironmentForm({
-      ...environmentForm,
-      variables: [...environmentForm.variables, { key: "", value: "" }],
-    });
-  }; */
-
-  /*   const updateEnvironmentVariable = (
-    index: number,
-    field: "key" | "value",
-    value: string
-  ) => {
-    const newVariables = [...environmentForm.variables];
-    newVariables[index][field] = value;
-    setEnvironmentForm({ ...environmentForm, variables: newVariables });
-  };
-
-  const removeEnvironmentVariable = (index: number) => {
-    const newVariables = environmentForm.variables.filter(
-      (_, i) => i !== index
-    );
-    if (newVariables.length === 0) {
-      newVariables.push({ key: "", value: "" });
-    }
-    setEnvironmentForm({ ...environmentForm, variables: newVariables });
-  }; */
-
-/*   const toggleCollectionInSchedule = (collectionId: string) => {
-    const newCollections = scheduleForm.collections.includes(collectionId)
-      ? scheduleForm.collections.filter((id) => id !== collectionId)
-      : [...scheduleForm.collections, collectionId];
-
-    setScheduleForm({ ...scheduleForm, collections: newCollections });
-  };
-
-  const removeCollectionFromSchedule = (collectionId: string) => {
-    setScheduleForm({
-      ...scheduleForm,
-      collections: scheduleForm.collections.filter((id) => id !== collectionId),
-    });
-  }; */
-
-/*   const getSelectedCollectionNames = () => {
-    return collections
-      .filter((c) => scheduleForm.collections.includes(c._id))
-      .map((c) => c.name);
-  }; */
 
   const getScheduleExecutions = (scheduleId: string) => {
     return scheduleExecutions
@@ -761,7 +490,7 @@ export function Sidebar() {
         isOpen={showNewCollectionForm}
         onClose={() => setShowNewCollectionForm(false)}
       />
-  
+
       {/* New Request Form Modal */}
       {showNewRequestForm && (
         <RequestModal
@@ -783,8 +512,8 @@ export function Sidebar() {
       {/* Schedule Form Modal */}
       {showNewScheduleForm && (
         <ScheduleModal
-        editingSchedule={editingSchedule}
-        onSave={saveSchedule}
+          editingSchedule={editingSchedule}
+          onSave={saveSchedule}
           onClose={() => {
             setShowNewScheduleForm(false);
             setEditingSchedule(null);
