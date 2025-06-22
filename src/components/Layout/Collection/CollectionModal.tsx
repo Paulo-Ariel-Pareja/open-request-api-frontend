@@ -1,24 +1,26 @@
 import { useState, useEffect } from "react";
 import { X, Save, Folder } from "lucide-react";
+import { useApp } from "../../../contexts/AppContext";
 import { Collection } from "../../../types";
 
 interface CollectionModalProps {
   collection?: Collection;
   isOpen: boolean;
   onClose: () => void;
-  onSave?: (
+/*   onSave?: (
     collection: Omit<Collection, "_id" | "size" | "createdAt">
   ) => Promise<Collection>;
-  onUpdate?: (updates: { name: string; description: string }) => Promise<void>;
+  onUpdate?: (updates: { name: string; description: string }) => Promise<void>; */
 }
 
 export function CollectionModal({
   collection,
   isOpen,
   onClose,
-  onSave,
-  onUpdate,
+ // onSave,
+ // onUpdate,
 }: CollectionModalProps) {
+  const {saveCollection, updateCollection} = useApp();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
@@ -63,14 +65,13 @@ export function CollectionModal({
 
     setSaving(true);
     try {
-      if (onUpdate) {
-        await onUpdate({
+      if (collection) {
+        await updateCollection(collection._id,{
           name: name.trim(),
           description: description.trim(),
         });
-      }
-      if (onSave) {
-        await onSave({
+      } else {
+        await saveCollection({
           name: name.trim(),
           description: description.trim(),
         });

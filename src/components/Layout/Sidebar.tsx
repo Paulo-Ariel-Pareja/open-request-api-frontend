@@ -21,6 +21,7 @@ import { Collection, Schedule, Environment } from "../../types";
 import { CollectionItem } from "./Collection/CollectionItem";
 import { CollectionModal } from "./Collection/CollectionModal";
 import { RequestModal } from "./Request/RequestModal";
+import { EnvironmentModal } from "./Environment/EnvironmentModal";
 
 export function Sidebar() {
   const {
@@ -33,13 +34,13 @@ export function Sidebar() {
     environmentsLoading,
     loadCollectionDetails,
     setActiveRequest,
-    saveCollection,
-    deleteCollection,
-    saveRequest,
-    deleteRequest,
-    saveEnvironment,
-    updateEnvironment,
-    deleteEnvironment,
+   // saveCollection,
+    deleteCollection, // se elimina desde el sidebar, no desde el modal
+    //saveRequest,
+    deleteRequest, // se elimina desde el sidebar, no desde el modal
+   // saveEnvironment,
+   // updateEnvironment,
+    deleteEnvironment, // se elimina desde el sidebar, no desde el modal
     toggleEnvironmentOnCache,
     searchCollections,
   } = useApp();
@@ -65,7 +66,6 @@ export function Sidebar() {
   // Modals and forms state
   // Collection
   const [showNewCollectionForm, setShowNewCollectionForm] = useState(false);
-  
 
   // Request
   const [showNewRequestForm, setShowNewRequestForm] = useState<string | null>(
@@ -78,23 +78,23 @@ export function Sidebar() {
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
 
   // Collection form state
-/*   const [newCollection, setNewCollection] = useState({
+  /*   const [newCollection, setNewCollection] = useState({
     name: "",
     description: "",
   }); */
 
   // Request form state
-/*   const [newRequest, setNewRequest] = useState({
+  /*   const [newRequest, setNewRequest] = useState({
     name: "",
     method: "GET" as const,
     url: "",
   }); */
 
   // Environment form state
-  const [environmentForm, setEnvironmentForm] = useState({
+  /*   const [environmentForm, setEnvironmentForm] = useState({
     name: "",
     variables: [{ key: "", value: "" }],
-  });
+  }); */
 
   // Schedule form state
   const [scheduleForm, setScheduleForm] = useState({
@@ -168,7 +168,7 @@ export function Sidebar() {
     setExpandedSchedules(newExpanded);
   };
 
-/*   const handleCreateCollection = async (e: React.FormEvent) => {
+  /*   const handleCreateCollection = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await saveCollection(newCollection);
@@ -179,7 +179,7 @@ export function Sidebar() {
     }
   }; */
 
-/*   const handleCreateRequest = async (e: React.FormEvent) => {
+  /*   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showNewRequestForm) return;
 
@@ -201,7 +201,7 @@ export function Sidebar() {
     }
   }; */
 
-  const handleCreateEnvironment = async (e: React.FormEvent) => {
+/*   const handleCreateEnvironment = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const variables: Record<string, string> = {};
@@ -222,8 +222,8 @@ export function Sidebar() {
       console.error("Error creating environment:", error);
     }
   };
-
-  const handleUpdateEnvironment = async (e: React.FormEvent) => {
+ */
+/*   const handleUpdateEnvironment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingEnvironment) return;
 
@@ -246,7 +246,7 @@ export function Sidebar() {
     } catch (error) {
       console.error("Error updating environment:", error);
     }
-  };
+  }; */
 
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -304,13 +304,13 @@ export function Sidebar() {
 
   const startEditingEnvironment = (environment: Environment) => {
     setEditingEnvironment(environment);
-    setEnvironmentForm({
+    /*     setEnvironmentForm({
       name: environment.name,
       variables: Object.entries(environment.variables).map(([key, value]) => ({
         key,
         value,
       })),
-    });
+    }); */
     setShowNewEnvironmentForm(true);
   };
 
@@ -326,14 +326,14 @@ export function Sidebar() {
     setShowNewScheduleForm(true);
   };
 
-  const addEnvironmentVariable = () => {
+  /*   const addEnvironmentVariable = () => {
     setEnvironmentForm({
       ...environmentForm,
       variables: [...environmentForm.variables, { key: "", value: "" }],
     });
-  };
+  }; */
 
-  const updateEnvironmentVariable = (
+  /*   const updateEnvironmentVariable = (
     index: number,
     field: "key" | "value",
     value: string
@@ -351,7 +351,7 @@ export function Sidebar() {
       newVariables.push({ key: "", value: "" });
     }
     setEnvironmentForm({ ...environmentForm, variables: newVariables });
-  };
+  }; */
 
   const toggleCollectionInSchedule = (collectionId: string) => {
     const newCollections = scheduleForm.collections.includes(collectionId)
@@ -757,13 +757,12 @@ export function Sidebar() {
       )}
 
       {/* New Collection Form Modal */}
-        <CollectionModal
+      <CollectionModal
         isOpen={showNewCollectionForm}
         onClose={() => setShowNewCollectionForm(false)}
-        onSave={saveCollection}
       />
 
-{/*       {showNewCollectionForm && (
+      {/*       {showNewCollectionForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-96">
             <h3 className="text-lg font-semibold text-white mb-4">
@@ -825,11 +824,13 @@ export function Sidebar() {
       )} */}
 
       {/* New Request Form Modal */}
-     {showNewRequestForm && <RequestModal 
-     collectionId={showNewRequestForm}
-      onClose={() => setShowNewRequestForm(null)}
-      />}
-{/*       {showNewRequestForm && (
+      {showNewRequestForm && (
+        <RequestModal
+          collectionId={showNewRequestForm}
+          onClose={() => setShowNewRequestForm(null)}
+        />
+      )}
+      {/*       {showNewRequestForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-96">
             <h3 className="text-lg font-semibold text-white mb-4">
@@ -912,6 +913,15 @@ export function Sidebar() {
 
       {/* Environment Form Modal */}
       {showNewEnvironmentForm && (
+        <EnvironmentModal
+        editingEnvironment={editingEnvironment}
+          onClose={() => {
+            setShowNewEnvironmentForm(false);
+            setEditingEnvironment(null);
+          }}
+        />
+      )}
+      {/*       {showNewEnvironmentForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 w-120 max-h-[80vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-white mb-4">
@@ -1022,7 +1032,7 @@ export function Sidebar() {
             </form>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Schedule Form Modal */}
       {showNewScheduleForm && (

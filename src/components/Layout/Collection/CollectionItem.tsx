@@ -31,7 +31,11 @@ export function CollectionItem({
   onSelectRequest,
   onDeleteRequest,
 }: CollectionItemProps) {
-  const { collectionDetails, loadCollectionDetails, updateCollection } = useApp();
+  const {
+    collectionDetails,
+    loadCollectionDetails,
+    //  updateCollection
+  } = useApp();
   const [showMenu, setShowMenu] = useState(false);
 
   const [showEditCollection, setShowEditCollection] = useState(false);
@@ -180,11 +184,6 @@ export function CollectionItem({
         onClose={() => {
           setShowEditCollection(false);
           setEditingCollection(null);
-        }}
-        onUpdate={async (updates) => {
-          if (editingCollection) {
-            await updateCollection(editingCollection._id, updates);
-          }
         }}
       />
     </>
