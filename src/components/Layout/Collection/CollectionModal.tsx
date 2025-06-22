@@ -7,18 +7,12 @@ interface CollectionModalProps {
   collection?: Collection;
   isOpen: boolean;
   onClose: () => void;
-/*   onSave?: (
-    collection: Omit<Collection, "_id" | "size" | "createdAt">
-  ) => Promise<Collection>;
-  onUpdate?: (updates: { name: string; description: string }) => Promise<void>; */
 }
 
 export function CollectionModal({
   collection,
   isOpen,
   onClose,
- // onSave,
- // onUpdate,
 }: CollectionModalProps) {
   const {saveCollection, updateCollection} = useApp();
   const [name, setName] = useState("");
