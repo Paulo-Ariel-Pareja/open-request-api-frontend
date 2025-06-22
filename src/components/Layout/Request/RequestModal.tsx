@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../../../contexts/AppContext";
-import { Folder, Globe, Save, X } from "lucide-react";
+import { Globe, Save, X } from "lucide-react";
 
 interface RequestModalProps {
   onClose: () => void;
@@ -16,7 +16,7 @@ export function RequestModal({ onClose, collectionId }: RequestModalProps) {
     url: "",
   });
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       onClose();
     } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -26,7 +26,7 @@ export function RequestModal({ onClose, collectionId }: RequestModalProps) {
 
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    setSaving(true);
     try {
       const savedRequest = await saveRequest(collectionId, {
         ...newRequest,
@@ -42,6 +42,8 @@ export function RequestModal({ onClose, collectionId }: RequestModalProps) {
       onClose();
     } catch (error) {
       console.error("Error creating request:", error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -57,9 +59,7 @@ export function RequestModal({ onClose, collectionId }: RequestModalProps) {
             <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-lg flex items-center justify-center">
               <Globe size={16} className="text-white" />
             </div>
-            <h2 className="text-xl font-semibold text-white">
-             New Request
-            </h2>
+            <h2 className="text-xl font-semibold text-white">New Request</h2>
           </div>
           <button
             onClick={onClose}
