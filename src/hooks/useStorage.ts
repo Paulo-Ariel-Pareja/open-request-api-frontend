@@ -35,7 +35,7 @@ export function useStorage() {
 
     // Listen for localStorage changes from other tabs/windows
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key?.startsWith('postman_clone_')) {
+      if (e.key?.startsWith('open_request_api_')) {
         loadData();
       }
     };

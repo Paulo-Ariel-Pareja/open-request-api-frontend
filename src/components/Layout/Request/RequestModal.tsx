@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../../../contexts/AppContext";
-import { Globe, Save, X } from "lucide-react";
+import { Save, Send, X } from "lucide-react";
 
 interface RequestModalProps {
   onClose: () => void;
@@ -57,7 +57,7 @@ export function RequestModal({ onClose, collectionId }: RequestModalProps) {
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-lg flex items-center justify-center">
-              <Globe size={16} className="text-white" />
+              <Send size={16} className="text-white" />
             </div>
             <h2 className="text-xl font-semibold text-white">New Request</h2>
           </div>
@@ -71,7 +71,6 @@ export function RequestModal({ onClose, collectionId }: RequestModalProps) {
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* HERE OLD CONTENT */}
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">

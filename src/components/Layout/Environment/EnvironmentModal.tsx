@@ -154,8 +154,6 @@ export function EnvironmentModal({
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* HERE OLD CONTENT */}
-
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
