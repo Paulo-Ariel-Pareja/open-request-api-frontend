@@ -112,6 +112,12 @@ export function AppProvider({ children }: AppProviderProps) {
     loadCollections();
     loadEnvironments();
 
+    // Set up environment update callback for schedules
+    scheduleService.setEnvironmentUpdateCallback((environmentId: string, key: string, value: string) => {
+      console.log(`[AppContext] Received environment update from schedule: ${key} = ${value} in environment ${environmentId}`);
+      updateEnvironmentVariable(environmentId, key, value);
+    });
+
     // Cleanup schedules on unmount
     return () => {
       scheduleService.cleanup();
@@ -406,7 +412,7 @@ export function AppProvider({ children }: AppProviderProps) {
     value: string
   ) => {
     console.log(
-      `Updating environment variable: ${key} = ${value} in environment ${environmentId}`
+      `[AppContext] Updating environment variable: ${key} = ${value} in environment ${environmentId}`
     );
 
     setEnvironments((prev) =>

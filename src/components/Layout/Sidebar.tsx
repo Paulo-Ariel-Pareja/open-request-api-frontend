@@ -581,13 +581,6 @@ export function Sidebar() {
       {activeTab === "schedules" && (
         <div className="flex-1 flex flex-col h-[calc(100vh-20rem)]">
           <div className="p-4 border-b border-gray-700">
-            <div className="bg-gray-700 rounded-lg text-white text-sm mb-3 justify-between p-3">
-              <div className="font-medium mb-1">Warning:</div>
-              <ul className="space-y-1">
-                <li>Schedules currently cannot access to</li>
-                <li>creating new environment variables but can read.</li>
-              </ul>
-            </div>
             <button
               onClick={() => setShowNewScheduleForm(true)}
               className="w-full px-3 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 flex items-center justify-center space-x-2 text-sm"
