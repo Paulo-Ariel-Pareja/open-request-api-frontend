@@ -1,19 +1,19 @@
-import { Schedule, ScheduleExecution } from '../types';
+import { Schedule, ScheduleExecution } from "../types";
 
 class StorageService {
-  private prefix = 'open_request_api_';
+  private prefix = "open_request_api_";
 
   // Schedules (localStorage only)
   saveSchedule(schedule: Schedule): void {
     const schedules = this.getSchedules();
-    const index = schedules.findIndex(s => s.id === schedule.id);
-    
+    const index = schedules.findIndex((s) => s.id === schedule.id);
+
     if (index >= 0) {
       schedules[index] = { ...schedule, updatedAt: new Date().toISOString() };
     } else {
       schedules.push(schedule);
     }
-    
+
     localStorage.setItem(`${this.prefix}schedules`, JSON.stringify(schedules));
   }
 
@@ -23,23 +23,31 @@ class StorageService {
   }
 
   deleteSchedule(id: string): void {
-    const schedules = this.getSchedules().filter(s => s.id !== id);
+    const schedules = this.getSchedules().filter((s) => s.id !== id);
     localStorage.setItem(`${this.prefix}schedules`, JSON.stringify(schedules));
-    
+
     // Also delete related executions
-    const executions = this.getScheduleExecutions().filter(e => e.scheduleId !== id);
-    localStorage.setItem(`${this.prefix}schedule_executions`, JSON.stringify(executions));
+    const executions = this.getScheduleExecutions().filter(
+      (e) => e.scheduleId !== id
+    );
+    localStorage.setItem(
+      `${this.prefix}schedule_executions`,
+      JSON.stringify(executions)
+    );
   }
 
   // Schedule Executions (localStorage only)
   saveScheduleExecution(execution: ScheduleExecution): void {
     const executions = this.getScheduleExecutions();
     executions.unshift(execution); // Add to beginning for chronological order
-    
+
     // Keep only last 100 executions to prevent storage bloat
     const trimmedExecutions = executions.slice(0, 100);
-    
-    localStorage.setItem(`${this.prefix}schedule_executions`, JSON.stringify(trimmedExecutions));
+
+    localStorage.setItem(
+      `${this.prefix}schedule_executions`,
+      JSON.stringify(trimmedExecutions)
+    );
   }
 
   getScheduleExecutions(): ScheduleExecution[] {
@@ -48,12 +56,17 @@ class StorageService {
   }
 
   getScheduleExecutionsByScheduleId(scheduleId: string): ScheduleExecution[] {
-    return this.getScheduleExecutions().filter(e => e.scheduleId === scheduleId);
+    return this.getScheduleExecutions().filter(
+      (e) => e.scheduleId === scheduleId
+    );
   }
 
   deleteScheduleExecution(id: string): void {
-    const executions = this.getScheduleExecutions().filter(e => e.id !== id);
-    localStorage.setItem(`${this.prefix}schedule_executions`, JSON.stringify(executions));
+    const executions = this.getScheduleExecutions().filter((e) => e.id !== id);
+    localStorage.setItem(
+      `${this.prefix}schedule_executions`,
+      JSON.stringify(executions)
+    );
   }
 }
 
