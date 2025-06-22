@@ -1,26 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Folder,
   Plus,
   Search,
   Globe,
   Clock,
-  ChevronDown,
-  ChevronRight,
-  MoreVertical,
   Edit,
   Trash2,
   CheckCircle,
   XCircle,
   AlertCircle,
   PlayCircle,
-  X,
   History,
   Timer,
 } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import { useStorage } from "../../hooks/useStorage";
-import { HttpRequest, Collection, Schedule, Environment } from "../../types";
+import { Collection, Schedule, Environment } from "../../types";
+import { CollectionItem } from "./Collection/CollectionItem";
+import { CollectionModal } from "./Collection/CollectionModal";
+import { RequestModal } from "./Request/RequestModal";
+import { EnvironmentModal } from "./Environment/EnvironmentModal";
+import { ScheduleModal } from "./Schedule/ScheduleModal";
 
 export function Sidebar() {
   const {
@@ -33,15 +34,10 @@ export function Sidebar() {
     environmentsLoading,
     loadCollectionDetails,
     setActiveRequest,
-    saveCollection,
     deleteCollection,
-    saveRequest,
     deleteRequest,
-    saveEnvironment,
-    updateEnvironment,
     deleteEnvironment,
     toggleEnvironmentOnCache,
-    searchCollections,
   } = useApp();
 
   const {
@@ -71,71 +67,6 @@ export function Sidebar() {
     useState<Environment | null>(null);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
 
-  // Collection form state
-  const [newCollection, setNewCollection] = useState({
-    name: "",
-    description: "",
-  });
-
-  // Request form state
-  const [newRequest, setNewRequest] = useState({
-    name: "",
-    method: "GET" as const,
-    url: "",
-  });
-
-  // Environment form state
-  const [environmentForm, setEnvironmentForm] = useState({
-    name: "",
-    variables: [{ key: "", value: "" }],
-  });
-
-  // Schedule form state
-  const [scheduleForm, setScheduleForm] = useState({
-    name: "",
-    description: "",
-    collections: [] as string[],
-    interval: 60,
-    enabled: true,
-  });
-
-  // Collection search for scheduler
-  const [collectionSearchQuery, setCollectionSearchQuery] = useState("");
-  const [collectionSearchResults, setCollectionSearchResults] = useState<
-    Collection[]
-  >([]);
-  const [showCollectionSearch, setShowCollectionSearch] = useState(false);
-
-  // Search functionality
-  useEffect(() => {
-    const performSearch = async () => {
-      if (searchQuery.trim()) {
-        const results = await searchCollections(searchQuery);
-        setSearchResults(results);
-      } else {
-        setSearchResults([]);
-      }
-    };
-
-    const debounceTimer = setTimeout(performSearch, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [searchQuery, searchCollections]);
-
-  // Collection search for scheduler
-  useEffect(() => {
-    const performCollectionSearch = async () => {
-      if (collectionSearchQuery.trim()) {
-        const results = await searchCollections(collectionSearchQuery);
-        setCollectionSearchResults(results);
-      } else {
-        setCollectionSearchResults(collections);
-      }
-    };
-
-    const debounceTimer = setTimeout(performCollectionSearch, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [collectionSearchQuery, searchCollections, collections]);
-
   const toggleCollection = async (collectionId: string) => {
     const newExpanded = new Set(expandedCollections);
     if (newExpanded.has(collectionId)) {
@@ -162,210 +93,14 @@ export function Sidebar() {
     setExpandedSchedules(newExpanded);
   };
 
-  const handleCreateCollection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await saveCollection(newCollection);
-      setNewCollection({ name: "", description: "" });
-      setShowNewCollectionForm(false);
-    } catch (error) {
-      console.error("Error creating collection:", error);
-    }
-  };
-
-  const handleCreateRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!showNewRequestForm) return;
-
-    try {
-      const savedRequest = await saveRequest(showNewRequestForm, {
-        ...newRequest,
-        headers: {},
-        body: "",
-        bodyType: "none",
-        preScript: "",
-        postScript: "",
-        tests: "",
-      });
-      setActiveRequest(savedRequest);
-      setNewRequest({ name: "", method: "GET", url: "" });
-      setShowNewRequestForm(null);
-    } catch (error) {
-      console.error("Error creating request:", error);
-    }
-  };
-
-  const handleCreateEnvironment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const variables: Record<string, string> = {};
-      environmentForm.variables.forEach((variable) => {
-        if (variable.key.trim()) {
-          variables[variable.key] = variable.value;
-        }
-      });
-
-      await saveEnvironment({
-        name: environmentForm.name,
-        variables,
-      });
-
-      setEnvironmentForm({ name: "", variables: [{ key: "", value: "" }] });
-      setShowNewEnvironmentForm(false);
-    } catch (error) {
-      console.error("Error creating environment:", error);
-    }
-  };
-
-  const handleUpdateEnvironment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingEnvironment) return;
-
-    try {
-      const variables: Record<string, string> = {};
-      environmentForm.variables.forEach((variable) => {
-        if (variable.key.trim()) {
-          variables[variable.key] = variable.value;
-        }
-      });
-
-      await updateEnvironment(editingEnvironment._id, {
-        name: environmentForm.name,
-        variables,
-      });
-
-      setEditingEnvironment(null);
-      setShowNewEnvironmentForm(false);
-      setEnvironmentForm({ name: "", variables: [{ key: "", value: "" }] });
-    } catch (error) {
-      console.error("Error updating environment:", error);
-    }
-  };
-
-  const handleCreateSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const schedule: Schedule = {
-        id: Date.now().toString(),
-        ...scheduleForm,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      saveSchedule(schedule);
-      setScheduleForm({
-        name: "",
-        description: "",
-        collections: [],
-        interval: 60,
-        enabled: true,
-      });
-      setShowNewScheduleForm(false);
-      setShowCollectionSearch(false);
-      setCollectionSearchQuery("");
-    } catch (error) {
-      console.error("Error creating schedule:", error);
-    }
-  };
-
-  const handleUpdateSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingSchedule) return;
-
-    try {
-      const updatedSchedule: Schedule = {
-        ...editingSchedule,
-        ...scheduleForm,
-        updatedAt: new Date().toISOString(),
-      };
-
-      saveSchedule(updatedSchedule);
-      setScheduleForm({
-        name: "",
-        description: "",
-        collections: [],
-        interval: 60,
-        enabled: true,
-      });
-      setShowNewScheduleForm(false);
-      setShowCollectionSearch(false);
-      setEditingSchedule(null);
-      setCollectionSearchQuery("");
-    } catch (error) {
-      console.error("Error updating schedule:", error);
-    }
-  };
-
   const startEditingEnvironment = (environment: Environment) => {
     setEditingEnvironment(environment);
-    setEnvironmentForm({
-      name: environment.name,
-      variables: Object.entries(environment.variables).map(([key, value]) => ({
-        key,
-        value,
-      })),
-    });
     setShowNewEnvironmentForm(true);
   };
 
   const startEditingSchedule = (schedule: Schedule) => {
     setEditingSchedule(schedule);
-    setScheduleForm({
-      name: schedule.name,
-      description: schedule.description,
-      collections: schedule.collections,
-      interval: schedule.interval,
-      enabled: schedule.enabled,
-    });
     setShowNewScheduleForm(true);
-  };
-
-  const addEnvironmentVariable = () => {
-    setEnvironmentForm({
-      ...environmentForm,
-      variables: [...environmentForm.variables, { key: "", value: "" }],
-    });
-  };
-
-  const updateEnvironmentVariable = (
-    index: number,
-    field: "key" | "value",
-    value: string
-  ) => {
-    const newVariables = [...environmentForm.variables];
-    newVariables[index][field] = value;
-    setEnvironmentForm({ ...environmentForm, variables: newVariables });
-  };
-
-  const removeEnvironmentVariable = (index: number) => {
-    const newVariables = environmentForm.variables.filter(
-      (_, i) => i !== index
-    );
-    if (newVariables.length === 0) {
-      newVariables.push({ key: "", value: "" });
-    }
-    setEnvironmentForm({ ...environmentForm, variables: newVariables });
-  };
-
-  const toggleCollectionInSchedule = (collectionId: string) => {
-    const newCollections = scheduleForm.collections.includes(collectionId)
-      ? scheduleForm.collections.filter((id) => id !== collectionId)
-      : [...scheduleForm.collections, collectionId];
-
-    setScheduleForm({ ...scheduleForm, collections: newCollections });
-  };
-
-  const removeCollectionFromSchedule = (collectionId: string) => {
-    setScheduleForm({
-      ...scheduleForm,
-      collections: scheduleForm.collections.filter((id) => id !== collectionId),
-    });
-  };
-
-  const getSelectedCollectionNames = () => {
-    return collections
-      .filter((c) => scheduleForm.collections.includes(c._id))
-      .map((c) => c.name);
   };
 
   const getScheduleExecutions = (scheduleId: string) => {
@@ -751,607 +486,39 @@ export function Sidebar() {
       )}
 
       {/* New Collection Form Modal */}
-      {showNewCollectionForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-96">
-            <h3 className="text-lg font-semibold text-white mb-4">
-              New Collection
-            </h3>
-            <form onSubmit={handleCreateCollection}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newCollection.name}
-                    onChange={(e) =>
-                      setNewCollection({
-                        ...newCollection,
-                        name: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={newCollection.description}
-                    onChange={(e) =>
-                      setNewCollection({
-                        ...newCollection,
-                        description: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white h-20 resize-none"
-                  />
-                </div>
-              </div>
-              <div className="flex space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowNewCollectionForm(false)}
-                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded hover:bg-cyan-600"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CollectionModal
+        isOpen={showNewCollectionForm}
+        onClose={() => setShowNewCollectionForm(false)}
+      />
 
       {/* New Request Form Modal */}
       {showNewRequestForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-96">
-            <h3 className="text-lg font-semibold text-white mb-4">
-              New Request
-            </h3>
-            <form onSubmit={handleCreateRequest}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newRequest.name}
-                    onChange={(e) =>
-                      setNewRequest({ ...newRequest, name: e.target.value })
-                    }
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Method
-                  </label>
-                  <select
-                    value={newRequest.method}
-                    onChange={(e) =>
-                      setNewRequest({
-                        ...newRequest,
-                        method: e.target.value as any,
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                  >
-                    <option value="GET">GET</option>
-                    <option value="POST">POST</option>
-                    <option value="PUT">PUT</option>
-                    <option value="DELETE">DELETE</option>
-                    <option value="PATCH">PATCH</option>
-                    <option value="HEAD">HEAD</option>
-                    <option value="OPTIONS">OPTIONS</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    URL
-                  </label>
-                  <input
-                    type="text"
-                    value={newRequest.url}
-                    onChange={(e) =>
-                      setNewRequest({ ...newRequest, url: e.target.value })
-                    }
-                    placeholder="https://api.example.com/endpoint"
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                    required
-                  />
-                </div>
-              </div>
-              <div className="flex space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowNewRequestForm(null)}
-                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded hover:bg-cyan-600"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <RequestModal
+          collectionId={showNewRequestForm}
+          onClose={() => setShowNewRequestForm(null)}
+        />
       )}
 
       {/* Environment Form Modal */}
       {showNewEnvironmentForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-120 max-h-[80vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-white mb-4">
-              {editingEnvironment ? "Edit Environment" : "New Environment"}
-            </h3>
-            <form
-              onSubmit={
-                editingEnvironment
-                  ? handleUpdateEnvironment
-                  : handleCreateEnvironment
-              }
-            >
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    value={environmentForm.name}
-                    onChange={(e) =>
-                      setEnvironmentForm({
-                        ...environmentForm,
-                        name: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-300">
-                      Variables
-                    </label>
-                    <button
-                      type="button"
-                      onClick={addEnvironmentVariable}
-                      className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
-                    >
-                      <Plus size={12} />
-                      <span>Add Variable</span>
-                    </button>
-                  </div>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {environmentForm.variables.map((variable, index) => (
-                      <div key={index} className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={variable.key}
-                          onChange={(e) =>
-                            updateEnvironmentVariable(
-                              index,
-                              "key",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Variable name"
-                          className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                        />
-                        <input
-                          type="text"
-                          value={variable.value}
-                          onChange={(e) =>
-                            updateEnvironmentVariable(
-                              index,
-                              "value",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Variable value"
-                          className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeEnvironmentVariable(index)}
-                          className="p-1 text-gray-400 hover:text-red-400"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="flex space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNewEnvironmentForm(false);
-                    setEditingEnvironment(null);
-                    setEnvironmentForm({
-                      name: "",
-                      variables: [{ key: "", value: "" }],
-                    });
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded hover:bg-cyan-600"
-                >
-                  {editingEnvironment ? "Update" : "Create"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <EnvironmentModal
+          editingEnvironment={editingEnvironment}
+          onClose={() => {
+            setShowNewEnvironmentForm(false);
+            setEditingEnvironment(null);
+          }}
+        />
       )}
-
       {/* Schedule Form Modal */}
       {showNewScheduleForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-[500px] max-h-[80vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-white mb-4">
-              {editingSchedule ? "Edit Schedule" : "New Schedule"}
-            </h3>
-            <form
-              onSubmit={
-                editingSchedule ? handleUpdateSchedule : handleCreateSchedule
-              }
-            >
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    value={scheduleForm.name}
-                    onChange={(e) =>
-                      setScheduleForm({ ...scheduleForm, name: e.target.value })
-                    }
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={scheduleForm.description}
-                    onChange={(e) =>
-                      setScheduleForm({
-                        ...scheduleForm,
-                        description: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white h-16 resize-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Interval (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={scheduleForm.interval}
-                    onChange={(e) =>
-                      setScheduleForm({
-                        ...scheduleForm,
-                        interval: parseInt(e.target.value) || 1,
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-300">
-                      Collections ({scheduleForm.collections.length} selected)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowCollectionSearch(!showCollectionSearch)
-                      }
-                      className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
-                    >
-                      <Search size={12} />
-                      <span>Browse Collections</span>
-                    </button>
-                  </div>
-
-                  {/* Selected Collections */}
-                  {scheduleForm.collections.length > 0 && (
-                    <div className="mb-3 p-3 bg-gray-700 rounded-lg">
-                      <div className="text-xs text-gray-400 mb-2">
-                        Selected Collections:
-                      </div>
-                      <div className="space-y-1">
-                        {getSelectedCollectionNames().map((name, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between text-sm"
-                          >
-                            <span className="text-white">{name}</span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                removeCollectionFromSchedule(
-                                  scheduleForm.collections[index]
-                                )
-                              }
-                              className="text-gray-400 hover:text-red-400"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Collection Search */}
-                  {showCollectionSearch && (
-                    <div className="border border-gray-600 rounded-lg p-3 bg-gray-700">
-                      <div className="relative mb-3">
-                        <Search
-                          size={14}
-                          className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Search collections..."
-                          value={collectionSearchQuery}
-                          onChange={(e) =>
-                            setCollectionSearchQuery(e.target.value)
-                          }
-                          className="w-full pl-9 pr-4 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-400"
-                        />
-                      </div>
-                      <div className="max-h-48 overflow-y-auto space-y-1">
-                        {collectionSearchResults.map((collection) => (
-                          <div
-                            key={collection._id}
-                            className="flex items-center justify-between p-2 hover:bg-gray-600 rounded cursor-pointer"
-                            onClick={() =>
-                              toggleCollectionInSchedule(collection._id)
-                            }
-                          >
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={scheduleForm.collections.includes(
-                                  collection._id
-                                )}
-                                onChange={() =>
-                                  toggleCollectionInSchedule(collection._id)
-                                }
-                                className="w-4 h-4 text-cyan-400 bg-gray-600 border-gray-500 rounded focus:ring-cyan-400"
-                              />
-                              <div>
-                                <div className="text-sm text-white">
-                                  {collection.name}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  {collection.size} requests
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        {collectionSearchResults.length === 0 &&
-                          collectionSearchQuery && (
-                            <div className="text-center text-gray-400 text-sm py-4">
-                              No collections found
-                            </div>
-                          )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="enabled"
-                    checked={scheduleForm.enabled}
-                    onChange={(e) =>
-                      setScheduleForm({
-                        ...scheduleForm,
-                        enabled: e.target.checked,
-                      })
-                    }
-                    className="w-4 h-4 text-cyan-400 bg-gray-700 border-gray-600 rounded focus:ring-cyan-400"
-                  />
-                  <label htmlFor="enabled" className="text-sm text-gray-300">
-                    Enable schedule
-                  </label>
-                </div>
-              </div>
-              <div className="flex space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNewScheduleForm(false);
-                    setEditingSchedule(null);
-                    setScheduleForm({
-                      name: "",
-                      description: "",
-                      collections: [],
-                      interval: 60,
-                      enabled: true,
-                    });
-                    setShowCollectionSearch(false);
-                    setCollectionSearchQuery("");
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded hover:bg-cyan-600"
-                >
-                  {editingSchedule ? "Update" : "Create"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Collection Item Component
-interface CollectionItemProps {
-  collection: Collection;
-  expanded: boolean;
-  onToggle: () => void;
-  onAddRequest: () => void;
-  onDeleteCollection: () => void;
-  onSelectRequest: (request: HttpRequest) => void;
-  onDeleteRequest: (collectionId: string, requestId: string) => void;
-}
-
-function CollectionItem({
-  collection,
-  expanded,
-  onToggle,
-  onAddRequest,
-  onDeleteCollection,
-  onSelectRequest,
-  onDeleteRequest,
-}: CollectionItemProps) {
-  const { collectionDetails, loadCollectionDetails } = useApp();
-  const [showMenu, setShowMenu] = useState(false);
-
-  const details = collectionDetails.get(collection._id);
-
-  useEffect(() => {
-    if (expanded && !details) {
-      loadCollectionDetails(collection._id);
-    }
-  }, [expanded, details, collection._id, loadCollectionDetails]);
-
-  return (
-    <div className="mb-2">
-      <div className="flex items-center justify-between p-2 hover:bg-gray-700 rounded-lg group">
-        <div className="flex items-center space-x-2 flex-1" onClick={onToggle}>
-          <button className="text-gray-400 hover:text-gray-300">
-            {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          </button>
-          <Folder size={16} className="text-cyan-400" />
-          <div className="flex-1">
-            <div className="text-white text-sm font-medium">
-              {collection.name}
-            </div>
-            <div className="text-gray-400 text-xs">
-              {collection.size} requests
-            </div>
-          </div>
-        </div>
-        <div className="relative">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu(!showMenu);
-            }}
-            className="p-1 text-gray-400 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <MoreVertical size={16} />
-          </button>
-          {showMenu && (
-            <div className="absolute right-0 top-8 bg-gray-700 border border-gray-600 rounded-lg shadow-lg z-10 min-w-[120px]">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddRequest();
-                  setShowMenu(false);
-                }}
-                className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-600 flex items-center space-x-2"
-              >
-                <Plus size={14} />
-                <span>Add Request</span>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteCollection();
-                  setShowMenu(false);
-                }}
-                className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-gray-600 flex items-center space-x-2"
-              >
-                <Trash2 size={14} />
-                <span>Delete</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {expanded && details && (
-        <div className="ml-6 space-y-1">
-          {details.requests.map((request) => (
-            <div
-              key={request._id}
-              className="flex items-center justify-between p-2 hover:bg-gray-700 rounded group cursor-pointer"
-              onClick={() => onSelectRequest(request)}
-            >
-              <div className="flex items-center space-x-2">
-                <span
-                  className={`px-2 py-1 text-xs font-mono rounded ${
-                    request.method === "GET"
-                      ? "bg-green-500/20 text-green-400"
-                      : request.method === "POST"
-                      ? "bg-blue-500/20 text-blue-400"
-                      : request.method === "PUT"
-                      ? "bg-orange-500/20 text-orange-400"
-                      : request.method === "DELETE"
-                      ? "bg-red-500/20 text-red-400"
-                      : "bg-gray-500/20 text-gray-400"
-                  }`}
-                >
-                  {request.method}
-                </span>
-                <span className="text-white text-sm">{request.name}</span>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteRequest(collection._id, request._id);
-                }}
-                className="p-1 text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
+        <ScheduleModal
+          editingSchedule={editingSchedule}
+          onSave={saveSchedule}
+          onClose={() => {
+            setShowNewScheduleForm(false);
+            setEditingSchedule(null);
+          }}
+        />
       )}
     </div>
   );
