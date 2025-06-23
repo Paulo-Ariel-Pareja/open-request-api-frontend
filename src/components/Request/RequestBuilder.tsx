@@ -10,6 +10,7 @@ import {
   Plus,
   CheckCircle,
   XCircle,
+  Terminal,
 } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import { requestService } from "../../services/request";
@@ -229,6 +230,112 @@ export function RequestBuilder() {
       url: finalUrl,
       headers: finalHeaders,
     };
+  };
+
+  const replaceVariables = (
+    text: string,
+    variables: Record<string, string>
+  ): string => {
+    return text.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+      const value = variables[varName];
+      if (value !== undefined) {
+        return value;
+      }
+      return match;
+    });
+  };
+
+  const generateCurlCommand = (): string => {
+    if (!request) return "";
+
+    // Merge all active environment variables
+    const mergedVariables: Record<string, string> = {};
+    activeEnvironments.forEach((env) => {
+      Object.assign(mergedVariables, env.variables);
+    });
+
+    // Build final request with all replacements
+    const finalRequest = buildFinalRequest();
+
+    // Replace environment variables in URL
+    let finalUrl = replaceVariables(finalRequest.url, mergedVariables);
+
+    // Replace path variables
+    pathVariables.forEach((pathVar) => {
+      if (pathVar.value) {
+        const replacedValue = replaceVariables(pathVar.value, mergedVariables);
+        finalUrl = finalUrl.replace(`:${pathVar.key}`, replacedValue);
+      }
+    });
+
+    let curlCommand = `curl -X ${finalRequest.method}`;
+
+    // Add URL (quoted to handle special characters)
+    curlCommand += ` '${finalUrl}'`;
+
+    // Add headers
+    Object.entries(finalRequest.headers).forEach(([key, value]) => {
+      const replacedValue = replaceVariables(value, mergedVariables);
+      curlCommand += ` \\\n  -H '${key}: ${replacedValue}'`;
+    });
+
+    // Add body if present and method supports it
+    if (
+      finalRequest.method !== "GET" &&
+      finalRequest.method !== "HEAD" &&
+      finalRequest.body
+    ) {
+      if (finalRequest.bodyType === "form") {
+        try {
+          const formFields = JSON.parse(finalRequest.body);
+          if (Array.isArray(formFields)) {
+            const enabledFields = formFields.filter(
+              (field: any) => field.enabled && field.key
+            );
+
+            if (enabledFields.length > 0) {
+              enabledFields.forEach((field: any) => {
+                if (field.type === "file") {
+                  curlCommand += ` \\\n  -F '${field.key}=@${
+                    field.fileName || "file.txt"
+                  }'`;
+                } else {
+                  const replacedValue = replaceVariables(
+                    field.value || "",
+                    mergedVariables
+                  );
+                  curlCommand += ` \\\n  -F '${field.key}=${replacedValue}'`;
+                }
+              });
+            }
+          }
+        } catch {
+          // Fallback to URL encoded
+          const replacedBody = replaceVariables(
+            finalRequest.body,
+            mergedVariables
+          );
+          curlCommand += ` \\\n  -d '${replacedBody}'`;
+        }
+      } else {
+        const replacedBody = replaceVariables(
+          finalRequest.body,
+          mergedVariables
+        );
+        curlCommand += ` \\\n  -d '${replacedBody}'`;
+      }
+    }
+
+    return curlCommand;
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      // You could add a toast notification here
+    } catch (error) {
+      console.error("Failed to copy to clipboard:", error);
+    }
   };
 
   const updateRequestData = (updates: Partial<HttpRequest>) => {
@@ -466,6 +573,7 @@ export function RequestBuilder() {
                 { id: "body", label: "Body" },
                 { id: "scripts", label: "Scripts" },
                 { id: "tests", label: "Tests" },
+                { id: "curl", label: "cURL" },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -476,6 +584,7 @@ export function RequestBuilder() {
                       : "text-gray-400 border-transparent hover:text-gray-300"
                   }`}
                 >
+                  {tab.id === "curl" && <Terminal size={16} className="mr-1" />}
                   {tab.label}
                   {tab.id === "pathvars" && pathVariables.length > 0 && (
                     <span className="ml-1 px-1 py-0.5 bg-cyan-500 text-white text-xs rounded-full">
@@ -782,6 +891,57 @@ pm.test('Response is ok', function () {
 });"
                   className="w-full h-64 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white font-mono text-sm resize-none"
                 />
+              </div>
+            )}
+
+            {activeTab === "curl" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-gray-300 flex items-center space-x-2">
+                    <Terminal size={16} />
+                    <span>cURL Command</span>
+                  </h4>
+                  <button
+                    onClick={() => copyToClipboard(generateCurlCommand())}
+                    className="px-3 py-1 bg-cyan-500 text-white rounded hover:bg-cyan-600 flex items-center space-x-2 text-sm"
+                  >
+                    <Copy size={14} />
+                    <span>Copy</span>
+                  </button>
+                </div>
+
+                <div className="text-xs text-gray-400 bg-gray-800 p-3 rounded-lg">
+                  <div className="font-medium mb-2">
+                    📋 cURL Command Preview
+                  </div>
+                  <ul className="space-y-1">
+                    <li>
+                      • All environment variables are replaced with their actual
+                      values
+                    </li>
+                    <li>• Path variables are substituted in the URL</li>
+                    <li>• Only enabled headers and parameters are included</li>
+                    <li>• Form data is converted to appropriate cURL format</li>
+                    <li>• Ready to copy and paste into terminal</li>
+                  </ul>
+                </div>
+
+                <div className="relative">
+                  <pre className="bg-gray-800 border border-gray-600 rounded-lg p-4 text-sm text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                    {generateCurlCommand() ||
+                      "// Configure your request to see the cURL command"}
+                  </pre>
+
+                  {generateCurlCommand() && (
+                    <button
+                      onClick={() => copyToClipboard(generateCurlCommand())}
+                      className="absolute top-2 right-2 p-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-300 transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      <Copy size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

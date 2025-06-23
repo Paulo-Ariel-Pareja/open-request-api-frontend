@@ -1,10 +1,6 @@
 import { useState } from "react";
 import {
-  Folder,
   Plus,
-  Search,
-  Globe,
-  Clock,
   Edit,
   Trash2,
   CheckCircle,
