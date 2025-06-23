@@ -30,7 +30,6 @@ export function EnvironmentTab() {
       <div className="p-4 border-b border-gray-700">
         <button
           onClick={() => {
-            console.log("New Environment button clicked");
             setShowNewEnvironmentForm(true)
         }}
           className="w-full px-3 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 flex items-center justify-center space-x-2 text-sm"

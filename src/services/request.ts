@@ -176,7 +176,6 @@ class RequestService {
       if (request.method !== "GET" && request.method !== "HEAD") {
         if (formData) {
           options.body = formData;
-          console.log("Using FormData for request body");
 
           // Log FormData contents for debugging
           for (const [key, value] of formData.entries()) {
@@ -203,13 +202,6 @@ class RequestService {
       }
 
       // Execute request
-      console.log("Executing request:", {
-        method: request.method,
-        url,
-        headers: options.headers,
-        bodyType: formData ? "FormData" : typeof options.body,
-      });
-
       const response = await fetch(url, options);
       const endTime = Date.now();
 

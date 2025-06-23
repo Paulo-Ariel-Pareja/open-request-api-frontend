@@ -15,7 +15,6 @@ class ScheduleService {
   ) => void;
 
   setActiveEnvironmentsForSchedule(environments: Environment[]) {
-    console.log("env active: ", environments);
     this.activeEnvironments = environments;
   }
 
