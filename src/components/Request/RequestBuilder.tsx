@@ -700,6 +700,11 @@ export function RequestBuilder() {
 
             {activeTab === "scripts" && (
               <div className="space-y-4">
+                <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-2">
+                  💡 <strong>Tip:</strong> Scripts running in requests can
+                  generate environment variables, but they are only temporary,
+                  they are not saved in the database.
+                </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center space-x-2">
                     <Code size={16} />

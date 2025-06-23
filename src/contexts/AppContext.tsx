@@ -425,7 +425,6 @@ export function AppProvider({ children }: AppProviderProps) {
               [key]: value,
             },
           };
-          console.log(`Environment ${env.name} updated:`, updatedEnv.variables);
           return updatedEnv;
         }
         return env;

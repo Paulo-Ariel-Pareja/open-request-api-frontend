@@ -23,7 +23,6 @@ export function FormDataEditor({ value, onChange }: FormDataEditorProps) {
       try {
         const parsed = JSON.parse(value);
         if (Array.isArray(parsed)) {
-          console.log("Parsed form data:", parsed);
           setFields(
             parsed.map((field) => ({
               ...field,
