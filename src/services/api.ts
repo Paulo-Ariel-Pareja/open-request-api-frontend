@@ -189,6 +189,21 @@ class ApiService {
     }
   }
 
+    async searchEnvironments(query: string): Promise<Environment[]> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/api/environment/search?q=${encodeURIComponent(query)}`
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error searching environment:", error);
+      throw error;
+    }
+  }
+
   // Environments API
   async getEnvironments(): Promise<Environment[]> {
     try {

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Edit, Trash2, Search } from "lucide-react";
 import { useApp } from "../../../contexts/AppContext";
 import { Environment } from "../../../types";
 import { EnvironmentModal } from "./EnvironmentModal";
@@ -10,20 +10,45 @@ export function EnvironmentTab() {
     environmentsLoading,
     deleteEnvironment,
     toggleEnvironmentOnCache,
+    searchEnvironments,
   } = useApp();
 
   const [showNewEnvironmentForm, setShowNewEnvironmentForm] = useState(false);
   const [editingEnvironment, setEditingEnvironment] =
     useState<Environment | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const startEditingEnvironment = (environment: Environment) => {
     setEditingEnvironment(environment);
     setShowNewEnvironmentForm(true);
   };
 
+  useEffect(() => {
+    const performSearch = async () => {
+      await searchEnvironments(searchQuery);
+    };
+
+    const debounceTimer = setTimeout(performSearch, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery]);
+
   return (
     <div className="flex-1 flex flex-col h-[calc(100vh-20rem)]">
       <div className="p-4 border-b border-gray-700">
+        {/*          */}
+        <div className="relative mb-3">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+          />
+          <input
+            type="text"
+            placeholder="Search environments..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-cyan-400"
+          />
+        </div>
         <button
           onClick={() => {
             setShowNewEnvironmentForm(true);
