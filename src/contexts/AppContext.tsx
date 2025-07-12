@@ -62,6 +62,7 @@ interface AppContextType {
     updates: Partial<HttpRequest>
   ) => Promise<HttpRequest>;
   deleteRequest: (collectionId: string, requestId: string) => Promise<void>;
+  searchEnvironments: (query: string) => Promise<Environment[]>;
   saveEnvironment: (
     environment: Omit<Environment, "_id" | "createdAt" | "isActive">
   ) => Promise<Environment>;
@@ -113,10 +114,14 @@ export function AppProvider({ children }: AppProviderProps) {
     loadEnvironments();
 
     // Set up environment update callback for schedules
-    scheduleService.setEnvironmentUpdateCallback((environmentId: string, key: string, value: string) => {
-      console.log(`[AppContext] Received environment update from schedule: ${key} = ${value} in environment ${environmentId}`);
-      updateEnvironmentVariable(environmentId, key, value);
-    });
+    scheduleService.setEnvironmentUpdateCallback(
+      (environmentId: string, key: string, value: string) => {
+        console.log(
+          `[AppContext] Received environment update from schedule: ${key} = ${value} in environment ${environmentId}`
+        );
+        updateEnvironmentVariable(environmentId, key, value);
+      }
+    );
 
     // Cleanup schedules on unmount
     return () => {
@@ -365,6 +370,30 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   };
 
+  const searchEnvironments = async (query: string): Promise<Environment[]> => {
+    try {
+      const fetchedEnvironments = await apiService.searchEnvironments(query);
+
+      // recover the variables that are active before loading the new ones
+      const activeEnvs = activeEnvironments.filter((env) => env.isActive);
+
+      // merge lists
+      const resultMap = new Map<string, Environment>();
+      for (const element of fetchedEnvironments) {
+        resultMap.set(element._id, element);
+      }
+      for (const element of activeEnvs) {
+        resultMap.set(element._id, element);
+      }
+      const results = Array.from(resultMap.values());
+      setEnvironments([...results]);
+      return fetchedEnvironments;
+    } catch (error) {
+      console.error("Error searching environment:", error);
+      return [];
+    }
+  };
+
   const saveEnvironment = async (
     environment: Omit<Environment, "_id" | "createdAt" | "isActive">
   ): Promise<Environment> => {
@@ -482,6 +511,7 @@ export function AppProvider({ children }: AppProviderProps) {
         saveRequest,
         updateRequest,
         deleteRequest,
+        searchEnvironments,
         saveEnvironment,
         toggleEnvironmentOnCache,
         updateEnvironment,
