@@ -50,7 +50,7 @@ export function Header() {
                     <div className="text-xs font-medium text-gray-300 mb-2">
                       Environment Variables:
                     </div>
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                    <div className="space-y-1">
                       {Object.keys(env.variables).length === 0 ? (
                         <div className="text-xs text-gray-500 italic">
                           No variables defined
