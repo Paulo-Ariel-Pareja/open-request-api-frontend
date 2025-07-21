@@ -46,7 +46,7 @@ export function Header() {
 
                 {/* Tooltip */}
                 {hoveredEnv === env._id && (
-                  <div className="absolute top-full left-0 mt-2 z-50 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 min-w-64 max-w-80">
+                  <div className="absolute top-full left-0 mt-2 z-50 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 w-[calc(100vh-15rem)]">
                     <div className="text-xs font-medium text-gray-300 mb-2">
                       Environment Variables:
                     </div>

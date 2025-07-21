@@ -298,7 +298,7 @@ class RequestService {
     text: string,
     variables: Record<string, string>
   ): string {
-    return text.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+    return text.replace(/\{\{([\w-]+)\}\}/g, (match, varName) => {
       const value = variables[varName];
       if (value !== undefined) {
         console.log(`Replacing variable {{${varName}}} with: ${value}`);

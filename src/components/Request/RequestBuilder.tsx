@@ -236,7 +236,7 @@ export function RequestBuilder() {
     text: string,
     variables: Record<string, string>
   ): string => {
-    return text.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+    return text.replace(/\{\{([\w-]+)\}\}/g, (match, varName) => {
       const value = variables[varName];
       if (value !== undefined) {
         return value;
@@ -949,7 +949,7 @@ pm.test('Response is ok', function () {
 
         {/* Response Panel */}
         {response && (
-          <div className="w-1/2 border-l border-gray-700 flex flex-col">
+          <div className="w-1/2 border-l border-gray-700 flex flex-col h-[calc(100vh-15rem)]">
             <div className="p-4 border-b border-gray-700">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-300">
