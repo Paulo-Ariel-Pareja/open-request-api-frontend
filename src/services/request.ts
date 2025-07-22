@@ -100,9 +100,6 @@ class RequestService {
                   if (realFile && realFile instanceof File) {
                     // Use the real file
                     formData!.append(field.key, realFile);
-                    console.log(
-                      `Added real file: ${realFile.name} (${realFile.size} bytes)`
-                    );
                   } else if (field.fileName) {
                     // Fallback: create a mock file with the stored filename
                     const mockFile = new File(
@@ -113,7 +110,6 @@ class RequestService {
                       }
                     );
                     formData!.append(field.key, mockFile);
-                    console.log(`Added mock file: ${field.fileName}`);
                   }
                 } else {
                   // Text field - replace environment variables in the value
@@ -301,7 +297,6 @@ class RequestService {
     return text.replace(/\{\{([\w-]+)\}\}/g, (match, varName) => {
       const value = variables[varName];
       if (value !== undefined) {
-        console.log(`Replacing variable {{${varName}}} with: ${value}`);
         return value;
       }
       console.warn(`Variable {{${varName}}} not found in environment`);
@@ -361,15 +356,9 @@ class RequestService {
         environment: {
           get: (key: string) => {
             const value = context.variables?.[key];
-            console.log(`Getting environment variable ${key}: ${value}`);
             return value;
           },
           set: (key: string, value: string, environmentName?: string) => {
-            console.log(
-              `Setting environment variable ${key} = ${value} in ${
-                environmentName || "default environment"
-              }`
-            );
             if (context.updateEnvironmentVariable) {
               context.updateEnvironmentVariable(key, value, environmentName);
             }
@@ -381,15 +370,9 @@ class RequestService {
         globals: {
           get: (key: string) => {
             const value = context.variables?.[key];
-            console.log(`Getting global variable ${key}: ${value}`);
             return value;
           },
           set: (key: string, value: string, environmentName?: string) => {
-            console.log(
-              `Setting global variable ${key} = ${value} in ${
-                environmentName || "default environment"
-              }`
-            );
             if (context.updateEnvironmentVariable) {
               context.updateEnvironmentVariable(key, value, environmentName);
             }
@@ -514,15 +497,9 @@ class RequestService {
         environment: {
           get: (key: string) => {
             const value = context.variables?.[key];
-            console.log(`Getting environment variable ${key}: ${value}`);
             return value;
           },
           set: (key: string, value: string, environmentName?: string) => {
-            console.log(
-              `Setting environment variable ${key} = ${value} in ${
-                environmentName || "default environment"
-              }`
-            );
             if (context.updateEnvironmentVariable) {
               context.updateEnvironmentVariable(key, value, environmentName);
             }
@@ -534,15 +511,9 @@ class RequestService {
         globals: {
           get: (key: string) => {
             const value = context.variables?.[key];
-            console.log(`Getting global variable ${key}: ${value}`);
             return value;
           },
           set: (key: string, value: string, environmentName?: string) => {
-            console.log(
-              `Setting global variable ${key} = ${value} in ${
-                environmentName || "default environment"
-              }`
-            );
             if (context.updateEnvironmentVariable) {
               context.updateEnvironmentVariable(key, value, environmentName);
             }

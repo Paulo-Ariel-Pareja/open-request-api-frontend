@@ -117,9 +117,6 @@ export function AppProvider({ children }: AppProviderProps) {
     // Set up environment update callback for schedules
     scheduleService.setEnvironmentUpdateCallback(
       (environmentId: string, key: string, value: string) => {
-        console.log(
-          `[AppContext] Received environment update from schedule: ${key} = ${value} in environment ${environmentId}`
-        );
         updateEnvironmentVariable(environmentId, key, value);
       }
     );
@@ -441,10 +438,6 @@ export function AppProvider({ children }: AppProviderProps) {
     key: string,
     value: string
   ) => {
-    console.log(
-      `[AppContext] Updating environment variable: ${key} = ${value} in environment ${environmentId}`
-    );
-
     setEnvironments((prev) =>
       prev.map((env) => {
         if (env._id === environmentId) {
@@ -472,11 +465,11 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   };
 
-    const importPmCollection = async (file: File): Promise<void> => {
+  const importPmCollection = async (file: File): Promise<void> => {
     try {
       await apiService.importPmCollection(file);
     } catch (error) {
-      console.error('Error importing collection:', error);
+      console.error("Error importing collection:", error);
       throw error;
     }
   };
@@ -527,7 +520,7 @@ export function AppProvider({ children }: AppProviderProps) {
         updateEnvironment,
         updateEnvironmentVariable,
         deleteEnvironment,
-        importPmCollection
+        importPmCollection,
       }}
     >
       {children}
