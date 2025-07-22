@@ -77,6 +77,7 @@ interface AppContextType {
     value: string
   ) => void;
   deleteEnvironment: (environmentId: string) => Promise<void>;
+  importPmCollection: (file: File) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -471,6 +472,15 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   };
 
+    const importPmCollection = async (file: File): Promise<void> => {
+    try {
+      await apiService.importPmCollection(file);
+    } catch (error) {
+      console.error('Error importing collection:', error);
+      throw error;
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -517,6 +527,7 @@ export function AppProvider({ children }: AppProviderProps) {
         updateEnvironment,
         updateEnvironmentVariable,
         deleteEnvironment,
+        importPmCollection
       }}
     >
       {children}

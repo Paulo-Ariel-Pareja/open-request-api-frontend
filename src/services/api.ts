@@ -280,6 +280,25 @@ class ApiService {
       throw error;
     }
   }
+
+    async importPmCollection(file: File): Promise<void> {
+    try {
+      const formData = new FormData();
+      formData.append('collection', file);
+      
+      const response = await fetch(`${this.baseUrl}/api/collection/import`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error importing collection:', error);
+      throw error;
+    }
+  }
 }
 
 export const apiService = new ApiService();

@@ -314,7 +314,7 @@ class RequestService {
       // Create a sandboxed execution context
       const func = new Function("pm", "response", "environments", script);
 
-      // Mock pm object for Postman-like scripting
+      // Mock pm object for scripting
       const pm = {
         test: (name: string, fn: () => void) => {
           try {
