@@ -28,12 +28,8 @@ export function CollectionTab() {
 
   useEffect(() => {
     const performSearch = async () => {
-      if (searchQuery.trim()) {
-        const results = await searchCollections(searchQuery);
-        setSearchResults(results);
-      } else {
-        setSearchResults([]);
-      }
+      const results = await searchCollections(searchQuery);
+      setSearchResults(results);
     };
 
     const debounceTimer = setTimeout(performSearch, 300);
