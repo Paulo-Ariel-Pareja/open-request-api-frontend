@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Search, Upload } from "lucide-react";
 import { useApp } from "../../../contexts/AppContext";
 import { Collection } from "../../../types";
 import { CollectionItem } from "./CollectionItem";
@@ -15,6 +15,7 @@ export function CollectionTab() {
     deleteCollection,
     deleteRequest,
     searchCollections,
+    importPmCollection,
   } = useApp();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Collection[]>([]);
@@ -25,15 +26,46 @@ export function CollectionTab() {
   const [showNewRequestForm, setShowNewRequestForm] = useState<string | null>(
     null
   );
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.name.endsWith(".json")) {
+      alert("Please select a valid JSON file");
+      return;
+    }
+
+    setImporting(true);
+    try {
+      await importPmCollection(file);
+      alert("Collection imported successfully! Please refresh to see changes or search collection name.");
+    } catch (error) {
+      console.error("Import failed:", error);
+      alert("Failed to import collection. Please check the file format.");
+    } finally {
+      setImporting(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+     
+    }
+  };
 
   useEffect(() => {
     const performSearch = async () => {
-      if (searchQuery.trim()) {
-        const results = await searchCollections(searchQuery);
-        setSearchResults(results);
-      } else {
-        setSearchResults([]);
-      }
+      const results = await searchCollections(searchQuery);
+      setSearchResults(results);
     };
 
     const debounceTimer = setTimeout(performSearch, 300);
@@ -59,6 +91,7 @@ export function CollectionTab() {
     <div className="flex-1 flex flex-col h-[calc(100vh-20rem)]">
       {/* Search and Add */}
       <div className="p-4 border-b border-gray-700">
+        <div className="space-y-2">
         <div className="relative mb-3">
           <Search
             size={16}
@@ -79,6 +112,25 @@ export function CollectionTab() {
           <Plus size={16} />
           <span>New Collection</span>
         </button>
+          
+          <button
+            onClick={handleImportClick}
+            disabled={importing}
+            className="w-full px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm transition-colors"
+          >
+            <Upload size={16} />
+            <span>{importing ? 'Importing...' : 'Import Collection'}</span>
+          </button>
+        </div>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
       </div>
 
       {/* Collections List */}
