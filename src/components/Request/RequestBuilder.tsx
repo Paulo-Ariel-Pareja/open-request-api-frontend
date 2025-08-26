@@ -88,6 +88,9 @@ export function RequestBuilder() {
             };
           });
           setParams(urlParams);
+        } else{
+          const initParams: KeyValuePair[] = [{ key: "", value: "", enabled: true }];
+          setParams(initParams);
         }
       }
 
@@ -411,7 +414,7 @@ export function RequestBuilder() {
     if (request) {
       const enabledParams = newParams.filter((p) => p.enabled && p.key.trim());
 
-      try {
+/*       try {
         const url = new URL(request.url || "http://example.com");
         const baseWithoutParams = `${url.protocol}//${url.host}${url.pathname}`;
 
@@ -426,7 +429,7 @@ export function RequestBuilder() {
         } else {
           updateRequestData({ url: baseWithoutParams });
         }
-      } catch {
+      } catch { */
         let baseURL = request.url;
         if (request.url.includes("?")) {
           baseURL = request.url.split("?")[0];
@@ -442,7 +445,7 @@ export function RequestBuilder() {
         } else {
           updateRequestData({ url: baseURL });
         }
-      }
+     // }
     }
   };
 
