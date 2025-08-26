@@ -70,7 +70,7 @@ class RequestService {
       // Replace environment variables in URL and body
       let url = this.replaceVariables(request.url, mergedVariables);
       url = this.replacePathVariables(url, request.pathVariables);
-
+      url = this.replaceVariables(url, mergedVariables);
       let body = this.replaceVariables(request.body, mergedVariables);
 
       // Prepare headers
