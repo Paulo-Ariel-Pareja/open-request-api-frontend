@@ -68,7 +68,9 @@ class RequestService {
       }
 
       // Replace environment variables in URL and body
-      const url = this.replaceVariables(request.url, mergedVariables);
+      let url = this.replaceVariables(request.url, mergedVariables);
+      url = this.replacePathVariables(url, request.pathVariables);
+
       let body = this.replaceVariables(request.body, mergedVariables);
 
       // Prepare headers
@@ -201,6 +203,29 @@ class RequestService {
       const response = await fetch(url, options);
       const endTime = Date.now();
 
+      if (!response.ok) {
+        // Get error response data
+        let errorData: any;
+        const contentType = response.headers.get("content-type") || "";
+        
+        if (contentType.includes("application/json")) {
+          try {
+            errorData = await response.json();
+          } catch {
+            errorData = await response.text();
+          }
+        } else {
+          errorData = await response.text();
+          console.log('error text response: ', errorData)
+        }
+
+        // Throw an error with the response details
+        const error = new Error(errorData);
+        (error as any).status = response.status;
+        (error as any).headers = response.headers;
+        throw error;
+      }
+
       // Get response data
       let data: any;
       const contentType = response.headers.get("content-type") || "";
@@ -272,9 +297,9 @@ class RequestService {
       const endTime = Date.now();
       console.error("Request execution error:", error);
       throw {
-        status: 0,
-        statusText: "Network Error",
-        headers: {},
+        status: error?.status || 0,
+        statusText: error?.message || "Network Error",
+        headers: error?.headers || {},
         data: error instanceof Error ? error.message : "Unknown error",
         time: endTime - startTime,
         size: 0,
@@ -302,6 +327,21 @@ class RequestService {
       console.warn(`Variable {{${varName}}} not found in environment`);
       return match;
     });
+  }
+
+  private replacePathVariables(
+    url: string,
+    pathVariables: Record<string, string> = {}
+  ): string {
+    let processedUrl = url;
+    
+    // Replace path variables like :id, :name, etc.
+    Object.entries(pathVariables).forEach(([key, value]) => {
+      const pathVariablePattern = new RegExp(`:${key}(?=/|$)`, 'g');
+      processedUrl = processedUrl.replace(pathVariablePattern, value);
+    });
+    
+    return processedUrl;
   }
 
   async executeScript(script: string, context: any = {}): Promise<any> {
