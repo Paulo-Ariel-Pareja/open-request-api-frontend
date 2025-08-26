@@ -75,7 +75,20 @@ export function RequestBuilder() {
         }
         setParams(urlParams);
       } catch {
-        setParams([{ key: "", value: "", enabled: true }]);
+        const parts = activeRequest.url.split("?");
+        if (parts.length > 1) {
+          const rawQuerystring: string = parts[1];
+          const querys = rawQuerystring.split("&");
+          const urlParams: KeyValuePair[] = querys.map((param) => {
+            const [key, value] = param.split("=");
+            return {
+              key: decodeURIComponent(key),
+              value: decodeURIComponent(value || ""),
+              enabled: true,
+            };
+          });
+          setParams(urlParams);
+        }
       }
 
       // Parse headers
@@ -366,7 +379,20 @@ export function RequestBuilder() {
           }
           setParams(urlParams);
         } catch {
-          // Invalid URL, keep current params
+          const parts = updates.url.split("?");
+          if (parts.length > 1) {
+            const rawQuerystring: string = parts[1];
+            const querys = rawQuerystring.split("&");
+            const urlParams: KeyValuePair[] = querys.map((param) => {
+              const [key, value] = param.split("=");
+              return {
+                key: decodeURIComponent(key),
+                value: decodeURIComponent(value || ""),
+                enabled: true,
+              };
+            });
+            setParams(urlParams);
+          }
         }
       }
     }
