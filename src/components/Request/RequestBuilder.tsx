@@ -410,10 +410,9 @@ export function RequestBuilder() {
     // Update the request URL with enabled params only
     if (request) {
       const enabledParams = newParams.filter((p) => p.enabled && p.key.trim());
-      let baseUrl = request.url;
 
       try {
-        const url = new URL(baseUrl || "http://example.com");
+        const url = new URL(request.url || "http://example.com");
         const baseWithoutParams = `${url.protocol}//${url.host}${url.pathname}`;
 
         if (enabledParams.length > 0) {
@@ -428,7 +427,21 @@ export function RequestBuilder() {
           updateRequestData({ url: baseWithoutParams });
         }
       } catch {
-        // Keep original URL if parsing fails
+        let baseURL = request.url;
+        if (request.url.includes("?")) {
+          baseURL = request.url.split("?")[0];
+        }
+        if (enabledParams.length > 0) {
+          const paramString = enabledParams
+            .map(
+              (p) =>
+              `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`
+            )
+            .join("&");
+          updateRequestData({ url: `${baseURL}?${paramString}` });
+        } else {
+          updateRequestData({ url: baseURL });
+        }
       }
     }
   };
