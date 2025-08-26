@@ -216,7 +216,6 @@ class RequestService {
           }
         } else {
           errorData = await response.text();
-          console.log('error text response: ', errorData)
         }
 
         // Throw an error with the response details
