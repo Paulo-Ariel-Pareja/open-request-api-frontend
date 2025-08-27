@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Send,
   Save,
@@ -17,16 +17,27 @@ import { requestService } from "../../services/request";
 import { HttpRequest, RequestResponse } from "../../types";
 import { FormDataEditor } from "./FormDataEditor";
 
-interface KeyValuePair {
+import { 
+  KeyValuePair, 
+  PathVariable, 
+  parseUrlParams, 
+  parseHeaders, 
+  extractPathVariables, 
+  replaceVariables, 
+  buildUrlWithParams, 
+  buildHeadersFromPairs 
+} from "./RequestBuilderUtils";
+import { useKeyValuePairs } from "./useKeyValuePairs";
+
+interface FormField {
   key: string;
   value: string;
+  type: string;
   enabled: boolean;
+  fileName?: string;
 }
 
-interface PathVariable {
-  key: string;
-  value: string;
-}
+
 
 export function RequestBuilder() {
   const {
@@ -45,66 +56,56 @@ export function RequestBuilder() {
   const [responseTab, setResponseTab] = useState("body");
   const [collectionId, setCollectionId] = useState<string | null>(null);
 
-  // Local state for params, headers, and path variables
-  const [params, setParams] = useState<KeyValuePair[]>([]);
-  const [headers, setHeaders] = useState<KeyValuePair[]>([]);
+  // Use custom hooks for managing key-value pairs
+  const { pairs: params, setPairs: setParams, updatePair: updateParam, addPair: addParam, removePair: removeParam } = 
+    useKeyValuePairs([]);
+  const { pairs: headers, setPairs: setHeaders, updatePair: updateHeader, addPair: addHeader, removePair: removeHeader } = 
+    useKeyValuePairs([]);
   const [pathVariables, setPathVariables] = useState<PathVariable[]>([]);
+
+  // Memoized values
+  const mergedEnvironmentVariables = useMemo(() => {
+    const merged: Record<string, string> = {};
+    activeEnvironments.forEach((env) => {
+      Object.assign(merged, env.variables);
+    });
+    return merged;
+  }, [activeEnvironments]);
+
+  const methods = useMemo(() => ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"], []);
+  const bodyTypes = useMemo(() => ["none", "json", "form", "raw"], []);
+
+  // Tab configuration
+  const tabs = useMemo(() => [
+    { id: "params", label: "Params" },
+    { id: "pathvars", label: "Path Variables" },
+    { id: "headers", label: "Headers" },
+    { id: "body", label: "Body" },
+    { id: "scripts", label: "Scripts" },
+    { id: "tests", label: "Tests" },
+    { id: "curl", label: "cURL" },
+  ], []);
+
+  const responseTabs = useMemo(() => [
+    { id: "body", label: "Body" },
+    { id: "headers", label: "Headers" },
+    { id: "tests", label: "Test Results" },
+  ], []);
 
   useEffect(() => {
     if (activeRequest) {
-      // Create a deep copy to avoid mutations
       const requestCopy = JSON.parse(JSON.stringify(activeRequest));
       setRequest(requestCopy);
       setResponse(null);
 
-      // Extract collection ID from request ID pattern (assuming format: collectionId_req_*)
+      // Extract collection ID
       const collectionIdMatch = activeRequest._id.match(/^(.+)_req_/);
-      if (collectionIdMatch) {
-        setCollectionId(collectionIdMatch[1]);
-      }
+      setCollectionId(collectionIdMatch ? collectionIdMatch[1] : null);
 
-      // Parse URL parameters
-      try {
-        const url = new URL(activeRequest.url || "http://example.com");
-        const urlParams: KeyValuePair[] = [];
-        url.searchParams.forEach((value, key) => {
-          urlParams.push({ key, value, enabled: true });
-        });
-        if (urlParams.length === 0) {
-          urlParams.push({ key: "", value: "", enabled: true });
-        }
-        setParams(urlParams);
-      } catch {
-        const parts = activeRequest.url.split("?");
-        if (parts.length > 1) {
-          const rawQuerystring: string = parts[1];
-          const querys = rawQuerystring.split("&");
-          const urlParams: KeyValuePair[] = querys.map((param) => {
-            const [key, value] = param.split("=");
-            return {
-              key: decodeURIComponent(key),
-              value: decodeURIComponent(value || ""),
-              enabled: true,
-            };
-          });
-          setParams(urlParams);
-        }
-      }
-
-      // Parse headers
-      const headerPairs: KeyValuePair[] = Object.entries(
-        activeRequest.headers || {}
-      ).map(([key, value]) => ({
-        key,
-        value,
-        enabled: true,
-      }));
-      if (headerPairs.length === 0) {
-        headerPairs.push({ key: "", value: "", enabled: true });
-      }
-      setHeaders(headerPairs);
-
-      // Parse path variables from stored data or URL
+      // Parse URL parameters, headers, and path variables
+      setParams(parseUrlParams(activeRequest.url || ""));
+      setHeaders(parseHeaders(activeRequest.headers));
+      
       const storedPathVars = activeRequest.pathVariables || {};
       const pathVars = extractPathVariables(activeRequest.url || "");
       const mergedPathVars = pathVars.map((pathVar) => ({
@@ -120,56 +121,65 @@ export function RequestBuilder() {
       setPathVariables([]);
       setCollectionId(null);
     }
-  }, [activeRequest]);
+  }, [activeRequest, setParams, setHeaders]);
 
-  const extractPathVariables = (url: string): PathVariable[] => {
-    const matches = url.match(/:(\w+)/g);
-    if (!matches) return [];
+  const handleSave = useCallback(async () => {
+    if (!request) return;
+    
+    try {
+      const pathVarsObject: Record<string, string> = {};
+      pathVariables.forEach((pathVar) => {
+        pathVarsObject[pathVar.key] = pathVar.value;
+      });
 
-    return matches.map((match) => ({
-      key: match.substring(1), // Remove the ':'
-      value: "",
-    }));
-  };
+      const updatedRequest = {
+        ...request,
+        pathVariables: pathVarsObject,
+        updatedAt: new Date().toISOString(),
+      };
 
-  const handleSave = async () => {
-    if (request) {
-      try {
-        // Save path variables to request
-        const pathVarsObject: Record<string, string> = {};
-        pathVariables.forEach((pathVar) => {
-          pathVarsObject[pathVar.key] = pathVar.value;
-        });
+      const { collectionId, _id, createdAt, updatedAt, ...data } = updatedRequest;
+      await updateRequest(collectionId, request._id, data);
 
-        const updatedRequest = {
-          ...request,
-          pathVariables: pathVarsObject,
-          updatedAt: new Date().toISOString(),
-        };
-
-        const { collectionId, _id, createdAt, updatedAt, ...data } =
-          updatedRequest;
-        // Update request via API
-        await updateRequest(collectionId, request._id, data);
-
-        // Update local state
-        setRequest(updatedRequest);
-        setActiveRequest(updatedRequest);
-      } catch (error) {
-        console.error("Error saving request:", error);
-      }
+      setRequest(updatedRequest);
+      setActiveRequest(updatedRequest);
+    } catch (error) {
+      console.error("Error saving request:", error);
     }
-  };
+  }, [request, pathVariables, updateRequest, setActiveRequest]);
 
-  const handleSend = async () => {
+  const buildFinalRequest = useCallback((): HttpRequest => {
+    if (!request) return request!;
+
+    let finalUrl = request.url;
+
+    // Replace path variables
+    pathVariables.forEach((pathVar) => {
+      if (pathVar.value) {
+        finalUrl = finalUrl.replace(`:${pathVar.key}`, pathVar.value);
+      }
+    });
+
+    // Build URL with parameters
+    finalUrl = buildUrlWithParams(finalUrl, params);
+
+    // Build headers
+    const finalHeaders = buildHeadersFromPairs(headers);
+
+    return {
+      ...request,
+      url: finalUrl,
+      headers: finalHeaders,
+    };
+  }, [request, pathVariables, params, headers]);
+
+  const handleSend = useCallback(async () => {
     if (!request) return;
 
     setLoading(true);
     try {
-      // Build final request with current params, headers, and path variables
       const finalRequest = buildFinalRequest();
-
-      // Create callback to update environment variables
+      
       const onEnvironmentUpdate = (
         environmentId: string,
         key: string,
@@ -184,111 +194,35 @@ export function RequestBuilder() {
         onEnvironmentUpdate
       );
       setResponse(result);
-      setResponseTab("body"); // Switch to body tab to show response
+      setResponseTab("body");
     } catch (error) {
       setResponse(error as RequestResponse);
       setResponseTab("body");
     } finally {
       setLoading(false);
     }
-  };
+  }, [request, buildFinalRequest, activeEnvironments, updateEnvironmentVariable]);
 
-  const buildFinalRequest = (): HttpRequest => {
-    if (!request) return request!;
-
-    let finalUrl = request.url;
-
-    // Replace path variables
-    pathVariables.forEach((pathVar) => {
-      if (pathVar.value) {
-        finalUrl = finalUrl.replace(`:${pathVar.key}`, pathVar.value);
-      }
-    });
-
-    // Build URL with parameters (only enabled ones)
-    const enabledParams = params.filter((p) => p.enabled && p.key.trim());
-
-    if (enabledParams.length > 0) {
-      try {
-        const url = new URL(finalUrl || "http://example.com");
-        url.search = ""; // Clear existing params
-        enabledParams.forEach((param) => {
-          if (param.key.trim()) {
-            url.searchParams.set(param.key, param.value);
-          }
-        });
-        finalUrl = url.toString();
-      } catch {
-        // If URL is invalid, append params manually
-        const paramString = enabledParams
-          .map(
-            (p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`
-          )
-          .join("&");
-        finalUrl =
-          finalUrl + (finalUrl.includes("?") ? "&" : "?") + paramString;
-      }
-    }
-
-    // Build headers (only enabled ones)
-    const finalHeaders: Record<string, string> = {};
-    headers
-      .filter((h) => h.enabled && h.key.trim())
-      .forEach((header) => {
-        finalHeaders[header.key] = header.value;
-      });
-
-    return {
-      ...request,
-      url: finalUrl,
-      headers: finalHeaders,
-    };
-  };
-
-  const replaceVariables = (
-    text: string,
-    variables: Record<string, string>
-  ): string => {
-    return text.replace(/\{\{([\w-]+)\}\}/g, (match, varName) => {
-      const value = variables[varName];
-      if (value !== undefined) {
-        return value;
-      }
-      return match;
-    });
-  };
-
-  const generateCurlCommand = (): string => {
+  const generateCurlCommand = useCallback((): string => {
     if (!request) return "";
 
-    // Merge all active environment variables
-    const mergedVariables: Record<string, string> = {};
-    activeEnvironments.forEach((env) => {
-      Object.assign(mergedVariables, env.variables);
-    });
-
-    // Build final request with all replacements
     const finalRequest = buildFinalRequest();
-
-    // Replace environment variables in URL
-    let finalUrl = replaceVariables(finalRequest.url, mergedVariables);
+    let finalUrl = replaceVariables(finalRequest.url, mergedEnvironmentVariables);
 
     // Replace path variables
     pathVariables.forEach((pathVar) => {
       if (pathVar.value) {
-        const replacedValue = replaceVariables(pathVar.value, mergedVariables);
+        const replacedValue = replaceVariables(pathVar.value, mergedEnvironmentVariables);
         finalUrl = finalUrl.replace(`:${pathVar.key}`, replacedValue);
       }
     });
 
     let curlCommand = `curl -X ${finalRequest.method}`;
-
-    // Add URL (quoted to handle special characters)
     curlCommand += ` '${finalUrl}'`;
 
     // Add headers
     Object.entries(finalRequest.headers).forEach(([key, value]) => {
-      const replacedValue = replaceVariables(value, mergedVariables);
+      const replacedValue = replaceVariables(value, mergedEnvironmentVariables);
       curlCommand += ` \\\n  -H '${key}: ${replacedValue}'`;
     });
 
@@ -303,55 +237,51 @@ export function RequestBuilder() {
           const formFields = JSON.parse(finalRequest.body);
           if (Array.isArray(formFields)) {
             const enabledFields = formFields.filter(
-              (field: any) => field.enabled && field.key
+              (field: FormField) => field.enabled && field.key
             );
 
-            if (enabledFields.length > 0) {
-              enabledFields.forEach((field: any) => {
-                if (field.type === "file") {
-                  curlCommand += ` \\\n  -F '${field.key}=@${
-                    field.fileName || "file.txt"
-                  }'`;
-                } else {
-                  const replacedValue = replaceVariables(
-                    field.value || "",
-                    mergedVariables
-                  );
-                  curlCommand += ` \\\n  -F '${field.key}=${replacedValue}'`;
-                }
-              });
-            }
+            enabledFields.forEach((field: FormField) => {
+              if (field.type === "file") {
+                curlCommand += ` \\\n  -F '${field.key}=@${
+                  field.fileName || "file.txt"
+                }'`;
+              } else {
+                const replacedValue = replaceVariables(
+                  field.value || "",
+                  mergedEnvironmentVariables
+                );
+                curlCommand += ` \\\n  -F '${field.key}=${replacedValue}'`;
+              }
+            });
           }
         } catch {
-          // Fallback to URL encoded
           const replacedBody = replaceVariables(
             finalRequest.body,
-            mergedVariables
+            mergedEnvironmentVariables
           );
           curlCommand += ` \\\n  -d '${replacedBody}'`;
         }
       } else {
         const replacedBody = replaceVariables(
           finalRequest.body,
-          mergedVariables
+          mergedEnvironmentVariables
         );
         curlCommand += ` \\\n  -d '${replacedBody}'`;
       }
     }
 
     return curlCommand;
-  };
+  }, [request, buildFinalRequest, pathVariables, mergedEnvironmentVariables]);
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = useCallback(async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      // You could add a toast notification here
     } catch (error) {
       console.error("Failed to copy to clipboard:", error);
     }
-  };
+  }, []);
 
-  const updateRequestData = (updates: Partial<HttpRequest>) => {
+  const updateRequestData = useCallback((updates: Partial<HttpRequest>) => {
     if (request) {
       const updatedRequest = { ...request, ...updates };
       setRequest(updatedRequest);
@@ -360,144 +290,75 @@ export function RequestBuilder() {
       if (updates.url !== undefined) {
         const newPathVars = extractPathVariables(updates.url);
         setPathVariables((prevPathVars) => {
-          // Preserve existing values for matching keys
           return newPathVars.map((newVar) => {
             const existing = prevPathVars.find((pv) => pv.key === newVar.key);
             return existing || newVar;
           });
         });
-
-        // Parse URL parameters when URL changes
-        try {
-          const url = new URL(updates.url || "http://example.com");
-          const urlParams: KeyValuePair[] = [];
-          url.searchParams.forEach((value, key) => {
-            urlParams.push({ key, value, enabled: true });
-          });
-          if (urlParams.length === 0) {
-            urlParams.push({ key: "", value: "", enabled: true });
-          }
-          setParams(urlParams);
-        } catch {
-          const parts = updates.url.split("?");
-          if (parts.length > 1) {
-            const rawQuerystring: string = parts[1];
-            const querys = rawQuerystring.split("&");
-            const urlParams: KeyValuePair[] = querys.map((param) => {
-              const [key, value] = param.split("=");
-              return {
-                key: decodeURIComponent(key),
-                value: decodeURIComponent(value || ""),
-                enabled: true,
-              };
-            });
-            setParams(urlParams);
-          }
-        }
       }
     }
-  };
+  }, [request]);
 
-  const updateParam = (
-    index: number,
-    field: keyof KeyValuePair,
-    value: string | boolean
-  ) => {
-    const newParams = [...params];
-    newParams[index] = { ...newParams[index], [field]: value };
-    setParams(newParams);
-
-    // Update the request URL with enabled params only
+  const updateParamsOnUrl = useCallback((newParams: KeyValuePair[]) => {
     if (request) {
+      setParams(newParams);
       const enabledParams = newParams.filter((p) => p.enabled && p.key.trim());
 
-      try {
-        const url = new URL(request.url || "http://example.com");
-        const baseWithoutParams = `${url.protocol}//${url.host}${url.pathname}`;
-
-        if (enabledParams.length > 0) {
-          const paramString = enabledParams
-            .map(
-              (p) =>
-                `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`
-            )
-            .join("&");
-          updateRequestData({ url: `${baseWithoutParams}?${paramString}` });
-        } else {
-          updateRequestData({ url: baseWithoutParams });
-        }
-      } catch {
-        let baseURL = request.url;
-        if (request.url.includes("?")) {
-          baseURL = request.url.split("?")[0];
-        }
-        if (enabledParams.length > 0) {
-          const paramString = enabledParams
-            .map(
-              (p) =>
-              `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`
-            )
-            .join("&");
-          updateRequestData({ url: `${baseURL}?${paramString}` });
-        } else {
-          updateRequestData({ url: baseURL });
-        }
+      let baseURL = request.url;
+      if (request.url.includes("?")) {
+        baseURL = request.url.split("?")[0];
+      }
+      
+      if (enabledParams.length > 0) {
+        const paramString = enabledParams
+          .map(
+            (p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`
+          )
+          .join("&");
+        updateRequestData({ url: `${baseURL}?${paramString}` });
+      } else {
+        updateRequestData({ url: baseURL });
       }
     }
-  };
+  }, [request, setParams, updateRequestData]);
 
-  const addParam = () => {
-    setParams([...params, { key: "", value: "", enabled: true }]);
-  };
-
-  const removeParam = (index: number) => {
-    const newParams = params.filter((_, i) => i !== index);
-    if (newParams.length === 0) {
-      newParams.push({ key: "", value: "", enabled: true });
-    }
-    setParams(newParams);
-  };
-
-  const updateHeader = (
+  const updateParamWithUrl = useCallback((
     index: number,
     field: keyof KeyValuePair,
     value: string | boolean
   ) => {
-    const newHeaders = [...headers];
-    newHeaders[index] = { ...newHeaders[index], [field]: value };
-    setHeaders(newHeaders);
+    updateParam(index, field, value);
+    // Update URL after param change
+    const newParams = [...params];
+    newParams[index] = { ...newParams[index], [field]: value };
+    updateParamsOnUrl(newParams);
+  }, [updateParam, params, updateParamsOnUrl]);
 
-    // Update request headers with enabled headers only
+  const updateHeaderWithRequest = useCallback((
+    index: number,
+    field: keyof KeyValuePair,
+    value: string | boolean
+  ) => {
+    updateHeader(index, field, value);
+    
+    // Update request headers
     if (request) {
-      const finalHeaders: Record<string, string> = {};
-      newHeaders
-        .filter((h) => h.enabled && h.key.trim())
-        .forEach((header) => {
-          finalHeaders[header.key] = header.value;
-        });
+      const newHeaders = [...headers];
+      newHeaders[index] = { ...newHeaders[index], [field]: value };
+      const finalHeaders = buildHeadersFromPairs(newHeaders);
       updateRequestData({ headers: finalHeaders });
     }
-  };
+  }, [updateHeader, headers, request, updateRequestData]);
 
-  const addHeader = () => {
-    setHeaders([...headers, { key: "", value: "", enabled: true }]);
-  };
+  const updatePathVariable = useCallback((index: number, value: string) => {
+    setPathVariables(prev => {
+      const newPathVars = [...prev];
+      newPathVars[index] = { ...newPathVars[index], value };
+      return newPathVars;
+    });
+  }, []);
 
-  const removeHeader = (index: number) => {
-    const newHeaders = headers.filter((_, i) => i !== index);
-    if (newHeaders.length === 0) {
-      newHeaders.push({ key: "", value: "", enabled: true });
-    }
-    setHeaders(newHeaders);
-  };
-
-  const updatePathVariable = (index: number, value: string) => {
-    const newPathVars = [...pathVariables];
-    newPathVars[index] = { ...newPathVars[index], value };
-    setPathVariables(newPathVars);
-  };
-
-  const duplicateRequest = async () => {
+  const duplicateRequest = useCallback(async () => {
     if (request) {
       try {
         const { collectionId, _id, createdAt, updatedAt, ...data } = request;
@@ -505,17 +366,14 @@ export function RequestBuilder() {
           ...data,
           name: `${data.name} (Copy)`,
         });
-
         setActiveRequest(duplicatedRequest);
       } catch (error) {
         console.error("Error duplicating request:", error);
       }
     }
-  };
+  }, [request, saveRequest, setActiveRequest]);
 
-  const methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
-  const bodyTypes = ["none", "json", "form", "raw"];
-
+  // Early return for no request
   if (!request) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-900">
@@ -533,6 +391,329 @@ export function RequestBuilder() {
       </div>
     );
   }
+
+  // Render functions for tabs
+  const renderParamsTab = () => (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-gray-300">Query Parameters</h4>
+        <button
+          onClick={addParam}
+          className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
+        >
+          <Plus size={14} />
+          <span>Add Parameter</span>
+        </button>
+      </div>
+      <div className="space-y-2">
+        {params.map((param, index) => (
+          <div key={index} className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={param.enabled}
+              onChange={(e) => updateParamWithUrl(index, "enabled", e.target.checked)}
+              className="w-4 h-4 text-cyan-400 bg-gray-800 border-gray-600 rounded focus:ring-cyan-400"
+            />
+            <input
+              type="text"
+              value={param.key}
+              onChange={(e) => updateParamWithUrl(index, "key", e.target.value)}
+              placeholder="Parameter name"
+              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
+            />
+            <input
+              type="text"
+              value={param.value}
+              onChange={(e) => updateParamWithUrl(index, "value", e.target.value)}
+              placeholder="Parameter value (use {{variable}} for environment variables)"
+              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
+            />
+            <button
+              onClick={() => removeParam(index)}
+              className="p-2 text-gray-400 hover:text-red-400"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderPathVarsTab = () => (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-gray-300">Path Variables</h4>
+        <span className="text-xs text-gray-500">
+          Use :variable in URL to create path variables
+        </span>
+      </div>
+      {pathVariables.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-gray-500 text-sm">No path variables found</p>
+          <p className="text-gray-600 text-xs mt-1">
+            Add :variable to your URL to create path variables
+          </p>
+          <p className="text-gray-600 text-xs mt-1">
+            Example: https://api.example.com/users/:userId/posts/:postId
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {pathVariables.map((pathVar, index) => (
+            <div key={index} className="flex items-center space-x-2">
+              <span className="w-24 text-sm text-cyan-400 font-mono">
+                :{pathVar.key}
+              </span>
+              <input
+                type="text"
+                value={pathVar.value}
+                onChange={(e) => updatePathVariable(index, e.target.value)}
+                placeholder={`Value for ${pathVar.key} (use {{variable}} for environment variables)`}
+                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderHeadersTab = () => (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-gray-300">Headers</h4>
+        <button
+          onClick={addHeader}
+          className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
+        >
+          <Plus size={14} />
+          <span>Add Header</span>
+        </button>
+      </div>
+      <div className="space-y-2">
+        {headers.map((header, index) => (
+          <div key={index} className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={header.enabled}
+              onChange={(e) => updateHeaderWithRequest(index, "enabled", e.target.checked)}
+              className="w-4 h-4 text-cyan-400 bg-gray-800 border-gray-600 rounded focus:ring-cyan-400"
+            />
+            <input
+              type="text"
+              value={header.key}
+              onChange={(e) => updateHeaderWithRequest(index, "key", e.target.value)}
+              placeholder="Header name"
+              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
+            />
+            <input
+              type="text"
+              value={header.value}
+              onChange={(e) => updateHeaderWithRequest(index, "value", e.target.value)}
+              placeholder="Header value (use {{variable}} for environment variables)"
+              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
+            />
+            <button
+              onClick={() => removeHeader(index)}
+              className="p-2 text-gray-400 hover:text-red-400"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderBodyTab = () => (
+    <div className="space-y-4">
+      <div className="flex space-x-4">
+        {bodyTypes.map((type) => (
+          <label key={type} className="flex items-center space-x-2">
+            <input
+              type="radio"
+              name="bodyType"
+              value={type}
+              checked={request.bodyType === type}
+              onChange={(e) =>
+                updateRequestData({
+                  bodyType: e.target.value as HttpRequest['bodyType'],
+                  body: e.target.value === "none" ? "" : request.body,
+                })
+              }
+              className="text-cyan-400"
+            />
+            <span className="text-sm text-gray-300 capitalize">{type}</span>
+          </label>
+        ))}
+      </div>
+
+      {request.bodyType === "form" && (
+        <FormDataEditor
+          value={request.body}
+          onChange={(value) => updateRequestData({ body: value })}
+        />
+      )}
+
+      {request.bodyType !== "none" && request.bodyType !== "form" && (
+        <div className="space-y-2">
+          <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded">
+            💡 <strong>Tip:</strong> Use <code>{"{{variable}}"}</code>{" "}
+            to reference environment variables in your body
+          </div>
+          <textarea
+            value={request.body}
+            onChange={(e) => updateRequestData({ body: e.target.value })}
+            placeholder={`Enter ${request.bodyType} data... (use {{variable}} for environment variables)`}
+            className="w-full h-64 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white font-mono text-sm resize-none"
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const renderScriptsTab = () => (
+    <div className="space-y-4">
+      <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-2">
+        💡 <strong>Tip:</strong> Scripts running in requests can
+        generate environment variables, but they are only temporary,
+        they are not saved in the database.
+      </div>
+      
+      <div>
+        <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center space-x-2">
+          <Code size={16} />
+          <span>Pre-request Script</span>
+        </h4>
+        <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-2">
+          💡 <strong>Tip:</strong> Use{" "}
+          <code>pm.environment.set('key', 'value')</code> to update
+          environment variables
+        </div>
+        <textarea
+          value={request.preScript}
+          onChange={(e) => updateRequestData({ preScript: e.target.value })}
+          placeholder="// Execute JavaScript before sending request
+// Example:
+// pm.environment.set('timestamp', Date.now());
+// pm.environment.set('token', 'Bearer ' + pm.environment.get('apiKey'));"
+          className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white font-mono text-sm resize-none"
+        />
+      </div>
+
+      <div>
+        <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center space-x-2">
+          <Code size={16} />
+          <span>Post-response Script</span>
+        </h4>
+        <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-2">
+          💡 <strong>Tip:</strong> Use <code>pm.response.json()</code>{" "}
+          to access response data and{" "}
+          <code>pm.environment.set()</code> to save values
+        </div>
+        <textarea
+          value={request.postScript}
+          onChange={(e) => updateRequestData({ postScript: e.target.value })}
+          placeholder="// Execute JavaScript after receiving response
+// Example:
+// const responseData = pm.response.json();
+// pm.environment.set('token', responseData.token);
+// pm.environment.set('userId', responseData.user.id);"
+          className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white font-mono text-sm resize-none"
+        />
+      </div>
+    </div>
+  );
+
+  const renderTestsTab = () => (
+    <div>
+      <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center space-x-2">
+        <TestTube size={16} />
+        <span>Tests</span>
+      </h4>
+      <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-2">
+        💡 <strong>Tip:</strong> Use <code>pm.test()</code> to create
+        tests and <code>pm.expect()</code> for assertions
+      </div>
+      <textarea
+        value={request.tests}
+        onChange={(e) => updateRequestData({ tests: e.target.value })}
+        placeholder="pm.test('Status code is 200', function () {
+    pm.expect(pm.response.status).to.equal(200);
+});
+
+pm.test('Response has required fields', function () {
+    const responseData = pm.response.json();
+    pm.expect(responseData).to.have.property('id');
+    pm.expect(responseData).to.have.property('name');
+});
+
+pm.test('Response is ok', function () {
+    pm.expect(pm.response).to.be.ok;
+});"
+        className="w-full h-64 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white font-mono text-sm resize-none"
+      />
+    </div>
+  );
+
+  const renderCurlTab = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-gray-300 flex items-center space-x-2">
+          <Terminal size={16} />
+          <span>cURL Command</span>
+        </h4>
+        <button
+          onClick={() => copyToClipboard(generateCurlCommand())}
+          className="px-3 py-1 bg-cyan-500 text-white rounded hover:bg-cyan-600 flex items-center space-x-2 text-sm"
+        >
+          <Copy size={14} />
+          <span>Copy</span>
+        </button>
+      </div>
+
+      <div className="text-xs text-gray-400 bg-gray-800 p-3 rounded-lg">
+        <div className="font-medium mb-2">📋 cURL Command Preview</div>
+        <ul className="space-y-1">
+          <li>• All environment variables are replaced with their actual values</li>
+          <li>• Path variables are substituted in the URL</li>
+          <li>• Only enabled headers and parameters are included</li>
+          <li>• Form data is converted to appropriate cURL format</li>
+          <li>• Ready to copy and paste into terminal</li>
+        </ul>
+      </div>
+
+      <div className="relative">
+        <pre className="bg-gray-800 border border-gray-600 rounded-lg p-4 text-sm text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap break-all">
+          {generateCurlCommand() || "// Configure your request to see the cURL command"}
+        </pre>
+
+        {generateCurlCommand() && (
+          <button
+            onClick={() => copyToClipboard(generateCurlCommand())}
+            className="absolute top-2 right-2 p-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-300 transition-colors"
+            title="Copy to clipboard"
+          >
+            <Copy size={16} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "params": return renderParamsTab();
+      case "pathvars": return renderPathVarsTab();
+      case "headers": return renderHeadersTab();
+      case "body": return renderBodyTab();
+      case "scripts": return renderScriptsTab();
+      case "tests": return renderTestsTab();
+      case "curl": return renderCurlTab();
+      default: return null;
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-gray-900">
@@ -568,15 +749,11 @@ export function RequestBuilder() {
         <div className="flex space-x-2">
           <select
             value={request.method}
-            onChange={(e) =>
-              updateRequestData({ method: e.target.value as any })
-            }
+            onChange={(e) => updateRequestData({ method: e.target.value as HttpRequest['method'] })}
             className="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm font-mono"
           >
             {methods.map((method) => (
-              <option key={method} value={method}>
-                {method}
-              </option>
+              <option key={method} value={method}>{method}</option>
             ))}
           </select>
 
@@ -605,15 +782,7 @@ export function RequestBuilder() {
           {/* Tabs */}
           <div className="border-b border-gray-700">
             <div className="flex">
-              {[
-                { id: "params", label: "Params" },
-                { id: "pathvars", label: "Path Variables" },
-                { id: "headers", label: "Headers" },
-                { id: "body", label: "Body" },
-                { id: "scripts", label: "Scripts" },
-                { id: "tests", label: "Tests" },
-                { id: "curl", label: "cURL" },
-              ].map((tab) => (
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
@@ -637,352 +806,7 @@ export function RequestBuilder() {
 
           {/* Tab Content */}
           <div className="flex-1 p-4 overflow-y-auto">
-            {activeTab === "params" && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-gray-300">
-                    Query Parameters
-                  </h4>
-                  <button
-                    onClick={addParam}
-                    className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
-                  >
-                    <Plus size={14} />
-                    <span>Add Parameter</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  {params.map((param, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={param.enabled}
-                        onChange={(e) =>
-                          updateParam(index, "enabled", e.target.checked)
-                        }
-                        className="w-4 h-4 text-cyan-400 bg-gray-800 border-gray-600 rounded focus:ring-cyan-400"
-                      />
-                      <input
-                        type="text"
-                        value={param.key}
-                        onChange={(e) =>
-                          updateParam(index, "key", e.target.value)
-                        }
-                        placeholder="Parameter name"
-                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
-                      />
-                      <input
-                        type="text"
-                        value={param.value}
-                        onChange={(e) =>
-                          updateParam(index, "value", e.target.value)
-                        }
-                        placeholder="Parameter value (use {{variable}} for environment variables)"
-                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
-                      />
-                      <button
-                        onClick={() => removeParam(index)}
-                        className="p-2 text-gray-400 hover:text-red-400"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === "pathvars" && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-gray-300">
-                    Path Variables
-                  </h4>
-                  <span className="text-xs text-gray-500">
-                    Use :variable in URL to create path variables
-                  </span>
-                </div>
-
-                {pathVariables.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 text-sm">
-                      No path variables found
-                    </p>
-                    <p className="text-gray-600 text-xs mt-1">
-                      Add :variable to your URL to create path variables
-                    </p>
-                    <p className="text-gray-600 text-xs mt-1">
-                      Example:
-                      https://api.example.com/users/:userId/posts/:postId
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {pathVariables.map((pathVar, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <span className="w-24 text-sm text-cyan-400 font-mono">
-                          :{pathVar.key}
-                        </span>
-                        <input
-                          type="text"
-                          value={pathVar.value}
-                          onChange={(e) =>
-                            updatePathVariable(index, e.target.value)
-                          }
-                          placeholder={`Value for ${pathVar.key} (use {{variable}} for environment variables)`}
-                          className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === "headers" && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-gray-300">Headers</h4>
-                  <button
-                    onClick={addHeader}
-                    className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
-                  >
-                    <Plus size={14} />
-                    <span>Add Header</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  {headers.map((header, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={header.enabled}
-                        onChange={(e) =>
-                          updateHeader(index, "enabled", e.target.checked)
-                        }
-                        className="w-4 h-4 text-cyan-400 bg-gray-800 border-gray-600 rounded focus:ring-cyan-400"
-                      />
-                      <input
-                        type="text"
-                        value={header.key}
-                        onChange={(e) =>
-                          updateHeader(index, "key", e.target.value)
-                        }
-                        placeholder="Header name"
-                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
-                      />
-                      <input
-                        type="text"
-                        value={header.value}
-                        onChange={(e) =>
-                          updateHeader(index, "value", e.target.value)
-                        }
-                        placeholder="Header value (use {{variable}} for environment variables)"
-                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400"
-                      />
-                      <button
-                        onClick={() => removeHeader(index)}
-                        className="p-2 text-gray-400 hover:text-red-400"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === "body" && (
-              <div className="space-y-4">
-                <div className="flex space-x-4">
-                  {bodyTypes.map((type) => (
-                    <label key={type} className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        name="bodyType"
-                        value={type}
-                        checked={request.bodyType === type}
-                        onChange={(e) =>
-                          updateRequestData({
-                            bodyType: e.target.value as any,
-                            // Clear body when switching types to avoid confusion
-                            body: e.target.value === "none" ? "" : request.body,
-                          })
-                        }
-                        className="text-cyan-400"
-                      />
-                      <span className="text-sm text-gray-300 capitalize">
-                        {type}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-
-                {request.bodyType === "form" && (
-                  <FormDataEditor
-                    value={request.body}
-                    onChange={(value) => updateRequestData({ body: value })}
-                  />
-                )}
-
-                {request.bodyType !== "none" && request.bodyType !== "form" && (
-                  <div className="space-y-2">
-                    <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded">
-                      💡 <strong>Tip:</strong> Use <code>{"{{variable}}"}</code>{" "}
-                      to reference environment variables in your body
-                    </div>
-                    <textarea
-                      value={request.body}
-                      onChange={(e) =>
-                        updateRequestData({ body: e.target.value })
-                      }
-                      placeholder={`Enter ${request.bodyType} data... (use {{variable}} for environment variables)`}
-                      className="w-full h-64 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white font-mono text-sm resize-none"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === "scripts" && (
-              <div className="space-y-4">
-                <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-2">
-                  💡 <strong>Tip:</strong> Scripts running in requests can
-                  generate environment variables, but they are only temporary,
-                  they are not saved in the database.
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center space-x-2">
-                    <Code size={16} />
-                    <span>Pre-request Script</span>
-                  </h4>
-                  <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-2">
-                    💡 <strong>Tip:</strong> Use{" "}
-                    <code>pm.environment.set('key', 'value')</code> to update
-                    environment variables
-                  </div>
-                  <textarea
-                    value={request.preScript}
-                    onChange={(e) =>
-                      updateRequestData({ preScript: e.target.value })
-                    }
-                    placeholder="// Execute JavaScript before sending request
-// Example:
-// pm.environment.set('timestamp', Date.now());
-// pm.environment.set('token', 'Bearer ' + pm.environment.get('apiKey'));"
-                    className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white font-mono text-sm resize-none"
-                  />
-                </div>
-
-                <div>
-                  <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center space-x-2">
-                    <Code size={16} />
-                    <span>Post-response Script</span>
-                  </h4>
-                  <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-2">
-                    💡 <strong>Tip:</strong> Use <code>pm.response.json()</code>{" "}
-                    to access response data and{" "}
-                    <code>pm.environment.set()</code> to save values
-                  </div>
-                  <textarea
-                    value={request.postScript}
-                    onChange={(e) =>
-                      updateRequestData({ postScript: e.target.value })
-                    }
-                    placeholder="// Execute JavaScript after receiving response
-// Example:
-// const responseData = pm.response.json();
-// pm.environment.set('token', responseData.token);
-// pm.environment.set('userId', responseData.user.id);"
-                    className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white font-mono text-sm resize-none"
-                  />
-                </div>
-              </div>
-            )}
-
-            {activeTab === "tests" && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center space-x-2">
-                  <TestTube size={16} />
-                  <span>Tests</span>
-                </h4>
-                <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-2">
-                  💡 <strong>Tip:</strong> Use <code>pm.test()</code> to create
-                  tests and <code>pm.expect()</code> for assertions
-                </div>
-                <textarea
-                  value={request.tests}
-                  onChange={(e) => updateRequestData({ tests: e.target.value })}
-                  placeholder="pm.test('Status code is 200', function () {
-    pm.expect(pm.response.status).to.equal(200);
-});
-
-pm.test('Response has required fields', function () {
-    const responseData = pm.response.json();
-    pm.expect(responseData).to.have.property('id');
-    pm.expect(responseData).to.have.property('name');
-});
-
-pm.test('Response is ok', function () {
-    pm.expect(pm.response).to.be.ok;
-});"
-                  className="w-full h-64 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white font-mono text-sm resize-none"
-                />
-              </div>
-            )}
-
-            {activeTab === "curl" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-gray-300 flex items-center space-x-2">
-                    <Terminal size={16} />
-                    <span>cURL Command</span>
-                  </h4>
-                  <button
-                    onClick={() => copyToClipboard(generateCurlCommand())}
-                    className="px-3 py-1 bg-cyan-500 text-white rounded hover:bg-cyan-600 flex items-center space-x-2 text-sm"
-                  >
-                    <Copy size={14} />
-                    <span>Copy</span>
-                  </button>
-                </div>
-
-                <div className="text-xs text-gray-400 bg-gray-800 p-3 rounded-lg">
-                  <div className="font-medium mb-2">
-                    📋 cURL Command Preview
-                  </div>
-                  <ul className="space-y-1">
-                    <li>
-                      • All environment variables are replaced with their actual
-                      values
-                    </li>
-                    <li>• Path variables are substituted in the URL</li>
-                    <li>• Only enabled headers and parameters are included</li>
-                    <li>• Form data is converted to appropriate cURL format</li>
-                    <li>• Ready to copy and paste into terminal</li>
-                  </ul>
-                </div>
-
-                <div className="relative">
-                  <pre className="bg-gray-800 border border-gray-600 rounded-lg p-4 text-sm text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap break-all">
-                    {generateCurlCommand() ||
-                      "// Configure your request to see the cURL command"}
-                  </pre>
-
-                  {generateCurlCommand() && (
-                    <button
-                      onClick={() => copyToClipboard(generateCurlCommand())}
-                      className="absolute top-2 right-2 p-2 bg-gray-700 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-300 transition-colors"
-                      title="Copy to clipboard"
-                    >
-                      <Copy size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+            {renderTabContent()}
           </div>
         </div>
 
@@ -991,9 +815,7 @@ pm.test('Response is ok', function () {
           <div className="w-1/2 border-l border-gray-700 flex flex-col h-[calc(100vh-15rem)]">
             <div className="p-4 border-b border-gray-700">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-300">
-                  Response
-                </h3>
+                <h3 className="text-lg font-semibold text-gray-300">Response</h3>
                 <div className="flex items-center space-x-4 text-sm">
                   <span
                     className={`font-mono ${
@@ -1013,11 +835,7 @@ pm.test('Response is ok', function () {
             {/* Response Tabs */}
             <div className="border-b border-gray-700">
               <div className="flex">
-                {[
-                  { id: "body", label: "Body" },
-                  { id: "headers", label: "Headers" },
-                  { id: "tests", label: "Test Results" },
-                ].map((tab) => (
+                {responseTabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setResponseTab(tab.id)}
@@ -1075,18 +893,10 @@ pm.test('Response is ok', function () {
                         </h4>
                         <div className="flex items-center space-x-4 text-xs">
                           <span className="text-green-400">
-                            {
-                              response.testResults.filter((t) => t.passed)
-                                .length
-                            }{" "}
-                            passed
+                            {response.testResults.filter((t) => t.passed).length} passed
                           </span>
                           <span className="text-red-400">
-                            {
-                              response.testResults.filter((t) => !t.passed)
-                                .length
-                            }{" "}
-                            failed
+                            {response.testResults.filter((t) => !t.passed).length} failed
                           </span>
                         </div>
                       </div>
@@ -1103,18 +913,13 @@ pm.test('Response is ok', function () {
                           >
                             <div className="flex items-center space-x-2 mb-1">
                               {test.passed ? (
-                                <CheckCircle
-                                  size={16}
-                                  className="text-green-400"
-                                />
+                                <CheckCircle size={16} className="text-green-400" />
                               ) : (
                                 <XCircle size={16} className="text-red-400" />
                               )}
                               <span
                                 className={`text-sm font-medium ${
-                                  test.passed
-                                    ? "text-green-400"
-                                    : "text-red-400"
+                                  test.passed ? "text-green-400" : "text-red-400"
                                 }`}
                               >
                                 {test.name}
@@ -1131,10 +936,7 @@ pm.test('Response is ok', function () {
                     </>
                   ) : (
                     <div className="text-center py-8">
-                      <TestTube
-                        size={32}
-                        className="text-gray-600 mx-auto mb-2"
-                      />
+                      <TestTube size={32} className="text-gray-600 mx-auto mb-2" />
                       <p className="text-gray-500 text-sm">No tests executed</p>
                       <p className="text-gray-600 text-xs mt-1">
                         Add tests in the Tests tab to see results here
