@@ -295,9 +295,13 @@ export function RequestBuilder() {
             return existing || newVar;
           });
         });
+
+        // Parse and update query parameters when URL changes
+        const newParams = parseUrlParams(updates.url);
+        setParams(newParams);
       }
     }
-  }, [request]);
+  }, [request, setParams]);
 
   const updateParamsOnUrl = useCallback((newParams: KeyValuePair[]) => {
     if (request) {
