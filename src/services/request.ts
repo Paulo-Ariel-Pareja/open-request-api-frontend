@@ -219,7 +219,7 @@ class RequestService {
         }
 
         // Throw an error with the response details
-        const error = new Error(errorData);
+        const error = new Error(errorData.message || errorData);
         (error as any).status = response.status;
         (error as any).headers = response.headers;
         throw error;
