@@ -1,16 +1,34 @@
+import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { Collection, CollectionFull, HttpRequest, Environment } from "../types";
 
 class ApiService {
   private baseUrl = import.meta.env.VITE_API_URL;
+  private axiosInstance: AxiosInstance;
+
+  constructor() {
+    this.axiosInstance = axios.create({
+      baseURL: this.baseUrl,
+      timeout: 10000,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    // Add response interceptor for better error handling
+    this.axiosInstance.interceptors.response.use(
+      (response: AxiosResponse) => response,
+      (error) => {
+        console.error("API Error:", error.response?.data || error.message);
+        return Promise.reject(error);
+      }
+    );
+  }
 
   // Collections API
   async getCollections(): Promise<Collection[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/collection`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const response = await this.axiosInstance.get("/api/collection");
+      return response.data;
     } catch (error) {
       console.error("Error fetching collections:", error);
       throw error;
@@ -19,13 +37,8 @@ class ApiService {
 
   async getCollectionById(collectionId: string): Promise<CollectionFull> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/collection/${collectionId}`
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const response = await this.axiosInstance.get(`/api/collection/${collectionId}`);
+      return response.data;
     } catch (error) {
       console.error("Error fetching collection:", error);
       throw error;
@@ -36,17 +49,8 @@ class ApiService {
     collection: Omit<Collection, "_id" | "size" | "createdAt">
   ): Promise<Collection> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/collection`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(collection),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const response = await this.axiosInstance.post("/api/collection", collection);
+      return response.data;
     } catch (error) {
       console.error("Error creating collection:", error);
       throw error;
@@ -58,20 +62,8 @@ class ApiService {
     updates: Partial<Collection>
   ): Promise<Collection> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/collection/${collectionId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updates),
-        }
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const response = await this.axiosInstance.patch(`/api/collection/${collectionId}`, updates);
+      return response.data;
     } catch (error) {
       console.error("Error updating collection:", error);
       throw error;
@@ -80,15 +72,7 @@ class ApiService {
 
   async deleteCollection(collectionId: string): Promise<void> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/collection/${collectionId}`,
-        {
-          method: "DELETE",
-        }
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      await this.axiosInstance.delete(`/api/collection/${collectionId}`);
     } catch (error) {
       console.error("Error deleting collection:", error);
       throw error;
@@ -104,26 +88,18 @@ class ApiService {
     >
   ): Promise<HttpRequest> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/collection/${collectionId}/request`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(request),
-        }
+      const response = await this.axiosInstance.post(
+        `/api/collection/${collectionId}/request`,
+        request
       );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      return response.data;
     } catch (error) {
       console.error("Error creating request:", error);
       // Return mock data for development
       return {
         _id: Date.now().toString(),
         ...request,
+        collectionId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -136,20 +112,11 @@ class ApiService {
     updates: Partial<HttpRequest>
   ): Promise<HttpRequest> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/collection/${collectionId}/request/${requestId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updates),
-        }
+      const response = await this.axiosInstance.patch(
+        `/api/collection/${collectionId}/request/${requestId}`,
+        updates
       );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      return response.data;
     } catch (error) {
       console.error("Error updating request:", error);
       throw error;
@@ -158,15 +125,7 @@ class ApiService {
 
   async deleteRequest(collectionId: string, requestId: string): Promise<void> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/collection/${collectionId}/request/${requestId}`,
-        {
-          method: "DELETE",
-        }
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      await this.axiosInstance.delete(`/api/collection/${collectionId}/request/${requestId}`);
     } catch (error) {
       console.error("Error deleting request:", error);
       throw error;
@@ -176,28 +135,18 @@ class ApiService {
   // Search Collections
   async searchCollections(query: string): Promise<Collection[]> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/collection/search?q=${encodeURIComponent(query)}`
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const response = await this.axiosInstance.get(`/api/collection/search?q=${encodeURIComponent(query)}`);
+      return response.data;
     } catch (error) {
       console.error("Error searching collections:", error);
       throw error;
     }
   }
 
-    async searchEnvironments(query: string): Promise<Environment[]> {
+  async searchEnvironments(query: string): Promise<Environment[]> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/environment/search?q=${encodeURIComponent(query)}`
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const response = await this.axiosInstance.get(`/api/environment/search?q=${encodeURIComponent(query)}`);
+      return response.data;
     } catch (error) {
       console.error("Error searching environment:", error);
       throw error;
@@ -207,11 +156,8 @@ class ApiService {
   // Environments API
   async getEnvironments(): Promise<Environment[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/environment`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const response = await this.axiosInstance.get("/api/environment");
+      return response.data;
     } catch (error) {
       console.error("Error fetching environments:", error);
       throw error;
@@ -222,17 +168,8 @@ class ApiService {
     environment: Omit<Environment, "_id" | "createdAt" | "isActive">
   ): Promise<Environment> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/environment`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(environment),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const response = await this.axiosInstance.post("/api/environment", environment);
+      return response.data;
     } catch (error) {
       console.error("Error creating environment:", error);
       throw error;
@@ -244,20 +181,8 @@ class ApiService {
     updates: Omit<Environment, "_id" | "isActive" | "createdAt">
   ): Promise<Environment> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/environment/${environmentId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updates),
-        }
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
+      const response = await this.axiosInstance.patch(`/api/environment/${environmentId}`, updates);
+      return response.data;
     } catch (error) {
       console.error("Error updating environment:", error);
       throw error;
@@ -266,34 +191,23 @@ class ApiService {
 
   async deleteEnvironment(environmentId: string): Promise<void> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/environment/${environmentId}`,
-        {
-          method: "DELETE",
-        }
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      await this.axiosInstance.delete(`/api/environment/${environmentId}`);
     } catch (error) {
       console.error("Error deleting environment:", error);
       throw error;
     }
   }
 
-    async importPmCollection(file: File): Promise<void> {
+  async importPmCollection(file: File): Promise<void> {
     try {
       const formData = new FormData();
       formData.append('collection', file);
       
-      const response = await fetch(`${this.baseUrl}/api/collection/import`, {
-        method: 'POST',
-        body: formData,
+      await this.axiosInstance.post('/api/collection/import', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
     } catch (error) {
       console.error('Error importing collection:', error);
       throw error;

@@ -1,3 +1,4 @@
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
 import {
   HttpRequest,
   RequestResponse,
@@ -6,6 +7,188 @@ import {
 } from "../types";
 
 class RequestService {
+  private axiosInstance: AxiosInstance;
+
+  constructor() {
+    this.axiosInstance = axios.create({
+      timeout: 30000, // 30 seconds timeout for requests
+    });
+
+    // Add response interceptor for better error handling
+    this.axiosInstance.interceptors.response.use(
+      (response: AxiosResponse) => response,
+      (error) => {
+        console.error("Request Error:", error.response?.data || error.message);
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  private mergeEnvironmentVariables(
+    environments: Environment[]
+  ): Record<string, string> {
+    const merged: Record<string, string> = {};
+    environments.forEach((environment) => {
+      Object.assign(merged, environment.variables);
+    });
+    return merged;
+  }
+
+  private buildScriptContext(
+    request: HttpRequest,
+    environments: Environment[],
+    mergedVariables: Record<string, string>,
+    onEnvironmentUpdate?: (
+      environmentId: string,
+      key: string,
+      value: string
+    ) => void
+  ) {
+    return {
+      environments,
+      variables: mergedVariables,
+      request,
+      updateEnvironmentVariable: (
+        key: string,
+        value: string,
+        environmentName?: string
+      ) => {
+        mergedVariables[key] = value;
+        let targetEnv: Environment | undefined;
+        if (environmentName) {
+          targetEnv = environments.find((env) => env.name === environmentName);
+        } else {
+          targetEnv = environments.find((env) => env.isActive) || environments[0];
+        }
+        if (targetEnv && onEnvironmentUpdate) {
+          onEnvironmentUpdate(targetEnv._id, key, value);
+        }
+      },
+    };
+  }
+
+  private async parseResponseBody(response: AxiosResponse): Promise<unknown> {
+    return response.data;
+  }
+
+  private async parseErrorResponse(error: unknown): Promise<Error> {
+    const axiosError = error as { response?: { data?: unknown; status?: number; headers?: unknown }; message?: string };
+    const errorData = axiosError.response?.data || axiosError.message || "Request failed";
+    const message = typeof errorData === "object" && errorData !== null && "message" in errorData
+      ? String((errorData as { message?: unknown }).message || "Request failed")
+      : typeof errorData === "string"
+      ? errorData
+      : "Request failed";
+    
+    type HttpError = Error & { status?: number; headers?: unknown };
+    const httpError = new Error(message) as HttpError;
+    httpError.status = axiosError.response?.status || 0;
+    httpError.headers = axiosError.response?.headers || {};
+    return httpError;
+  }
+
+  private buildHeadersWithVariables(
+    baseHeaders: Record<string, string>,
+    variables: Record<string, string>
+  ): Record<string, string> {
+    const headers: Record<string, string> = { ...baseHeaders };
+    Object.keys(headers).forEach((key) => {
+      headers[key] = this.replaceVariables(headers[key], variables);
+    });
+    return headers;
+  }
+
+  private buildBodyAndHeaders(
+    request: HttpRequest,
+    mergedVariables: Record<string, string>,
+    headers: Record<string, string>
+  ): { body: string; formData?: FormData; headers: Record<string, string> } {
+    let body = this.replaceVariables(request.body, mergedVariables);
+    let formData: FormData | undefined;
+
+    if (request.bodyType === "form" && body) {
+      try {
+        const parsed = JSON.parse(body) as unknown;
+        if (Array.isArray(parsed)) {
+          type FormField = {
+            enabled?: boolean;
+            key?: string;
+            type?: string;
+            value?: string;
+            fileName?: string;
+            fileType?: string;
+          };
+          const formFields = parsed as FormField[];
+          formData = new FormData();
+          const storedFiles =
+            ((window as unknown as { __formDataFiles?: Record<string, File> })
+              .__formDataFiles || {}) as Record<string, File>;
+          formFields.forEach((field: FormField, index: number) => {
+            if (field.enabled && field.key) {
+              if (field.type === "file") {
+                const fileKey = `${field.key}_${index}`;
+                const realFile = storedFiles[fileKey];
+                if (realFile && realFile instanceof File) {
+                  formData!.append(field.key, realFile);
+                } else if (field.fileName) {
+                  const mockFile = new File(
+                    ["[File content not available in demo]"],
+                    field.fileName,
+                    { type: field.fileType || "application/octet-stream" }
+                  );
+                  formData!.append(field.key, mockFile);
+                }
+              } else {
+                const processedValue = this.replaceVariables(
+                  field.value || "",
+                  mergedVariables
+                );
+                formData!.append(field.key, processedValue);
+              }
+            }
+          });
+          delete headers["Content-Type"]; // Let browser set boundary
+          body = "";
+        }
+      } catch (error) {
+        console.warn("Error parsing form data:", error);
+        headers["Content-Type"] = "application/x-www-form-urlencoded";
+        try {
+          const parsed = JSON.parse(body) as unknown;
+          if (Array.isArray(parsed)) {
+            type TextField = {
+              enabled?: boolean;
+              key?: string;
+              type?: string;
+              value?: string;
+            };
+            const urlEncodedData = (parsed as TextField[])
+              .filter(
+                (field) => field.enabled && field.key && field.type === "text"
+              )
+              .map((field) => {
+                const processedValue = this.replaceVariables(
+                  field.value || "",
+                  mergedVariables
+                );
+                return `${encodeURIComponent(field.key!)}=${encodeURIComponent(
+                  processedValue
+                )}`;
+              })
+              .join("&");
+            body = urlEncodedData;
+          }
+        } catch {
+          // Keep original body
+        }
+      }
+    } else if (request.bodyType === "json" && body) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    return { body, formData, headers };
+  }
+
   async executeRequest(
     request: HttpRequest,
     environments: Environment[] = [],
@@ -18,45 +201,13 @@ class RequestService {
     const startTime = Date.now();
 
     try {
-      // Merge all active environment variables
-      const mergedVariables: Record<string, string> = {};
-      environments.forEach((env) => {
-        Object.assign(mergedVariables, env.variables);
-      });
-
-      // Create enhanced context for scripts
-      const scriptContext = {
-        environments,
-        variables: mergedVariables,
+      const mergedVariables = this.mergeEnvironmentVariables(environments);
+      const scriptContext = this.buildScriptContext(
         request,
-        updateEnvironmentVariable: (
-          key: string,
-          value: string,
-          environmentName?: string
-        ) => {
-          // Update the merged variables for immediate use
-          mergedVariables[key] = value;
-
-          // Find the target environment
-          let targetEnv: Environment | undefined;
-
-          if (environmentName) {
-            // Find environment by name
-            targetEnv = environments.find(
-              (env) => env.name === environmentName
-            );
-          } else {
-            // Use the first active environment, or first environment if none active
-            targetEnv =
-              environments.find((env) => env.isActive) || environments[0];
-          }
-
-          if (targetEnv && onEnvironmentUpdate) {
-            // Call the callback to update the environment in the context
-            onEnvironmentUpdate(targetEnv._id, key, value);
-          }
-        },
-      };
+        environments,
+        mergedVariables,
+        onEnvironmentUpdate
+      );
 
       // Execute pre-request script if present
       if (request.preScript?.trim()) {
@@ -67,182 +218,57 @@ class RequestService {
         }
       }
 
-      // Replace environment variables in URL and body
-      let url = this.replaceVariables(request.url, mergedVariables);
-      url = this.replacePathVariables(url, request.pathVariables);
+      // Build URL, headers and body
+      let url = this.replacePathVariables(request.url, request.pathVariables);
       url = this.replaceVariables(url, mergedVariables);
-      let body = this.replaceVariables(request.body, mergedVariables);
+      const headers = this.buildHeadersWithVariables(
+        request.headers,
+        mergedVariables
+      );
+      const { body, formData } = this.buildBodyAndHeaders(
+        request,
+        mergedVariables,
+        headers
+      );
 
-      // Prepare headers
-      const headers: Record<string, string> = { ...request.headers };
-
-      // Replace environment variables in headers
-      Object.keys(headers).forEach((key) => {
-        headers[key] = this.replaceVariables(headers[key], mergedVariables);
-      });
-
-      // Handle form data
-      let formData: FormData | undefined;
-      if (request.bodyType === "form" && body) {
-        try {
-          const formFields = JSON.parse(body);
-          if (Array.isArray(formFields)) {
-            formData = new FormData();
-
-            // Get stored files from global variable
-            const storedFiles = (window as any).__formDataFiles || {};
-
-            formFields.forEach((field: any, index: number) => {
-              if (field.enabled && field.key) {
-                if (field.type === "file") {
-                  // Try to get the real file from storage
-                  const fileKey = `${field.key}_${index}`;
-                  const realFile = storedFiles[fileKey];
-
-                  if (realFile && realFile instanceof File) {
-                    // Use the real file
-                    formData!.append(field.key, realFile);
-                  } else if (field.fileName) {
-                    // Fallback: create a mock file with the stored filename
-                    const mockFile = new File(
-                      ["[File content not available in demo]"],
-                      field.fileName,
-                      {
-                        type: field.fileType || "application/octet-stream",
-                      }
-                    );
-                    formData!.append(field.key, mockFile);
-                  }
-                } else {
-                  // Text field - replace environment variables in the value
-                  const processedValue = this.replaceVariables(
-                    field.value || "",
-                    mergedVariables
-                  );
-                  formData!.append(field.key, processedValue);
-                }
-              }
-            });
-
-            // Don't set Content-Type for FormData - browser will set it with boundary
-            delete headers["Content-Type"];
-            body = ""; // Clear body since we're using FormData
-          }
-        } catch (error) {
-          console.warn("Error parsing form data:", error);
-          // Fall back to URL encoded
-          headers["Content-Type"] = "application/x-www-form-urlencoded";
-
-          // Convert JSON form data to URL encoded format
-          try {
-            const formFields = JSON.parse(body);
-            if (Array.isArray(formFields)) {
-              const urlEncodedData = formFields
-                .filter(
-                  (field: any) =>
-                    field.enabled && field.key && field.type === "text"
-                )
-                .map((field: any) => {
-                  const processedValue = this.replaceVariables(
-                    field.value || "",
-                    mergedVariables
-                  );
-                  return `${encodeURIComponent(field.key)}=${encodeURIComponent(
-                    processedValue
-                  )}`;
-                })
-                .join("&");
-              body = urlEncodedData;
-            }
-          } catch {
-            // Keep original body if parsing fails
-          }
-        }
-      } else if (request.bodyType === "json" && body) {
-        headers["Content-Type"] = "application/json";
-      } else if (request.bodyType === "form" && body) {
-        headers["Content-Type"] = "application/x-www-form-urlencoded";
-      }
-
-      // Prepare fetch options
-      const options: RequestInit = {
-        method: request.method,
+      // Prepare axios config
+      const config: AxiosRequestConfig = {
+        method: request.method.toLowerCase(),
+        url,
         headers,
       };
 
       // Add body if not GET/HEAD
       if (request.method !== "GET" && request.method !== "HEAD") {
         if (formData) {
-          options.body = formData;
-
-          // Log FormData contents for debugging
-          for (const [key, value] of formData.entries()) {
-            if (value instanceof File) {
-              console.log(
-                `FormData field: ${key} = File(${value.name}, ${value.size} bytes, ${value.type})`
-              );
-            } else {
-              console.log(`FormData field: ${key} = ${value}`);
-            }
-          }
+          config.data = formData;
         } else if (body) {
           if (request.bodyType === "json") {
             try {
               JSON.parse(body); // Validate JSON
-              options.body = body;
+              config.data = body;
             } catch {
               throw new Error("Invalid JSON body");
             }
           } else {
-            options.body = body;
+            config.data = body;
           }
         }
       }
 
       // Execute request
-      const response = await fetch(url, options);
+      const response = await this.axiosInstance.request(config);
       const endTime = Date.now();
 
-      if (!response.ok) {
-        // Get error response data
-        let errorData: any;
-        const contentType = response.headers.get("content-type") || "";
-        
-        if (contentType.includes("application/json")) {
-          try {
-            errorData = await response.json();
-          } catch {
-            errorData = await response.text();
-          }
-        } else {
-          errorData = await response.text();
-        }
-
-        // Throw an error with the response details
-        const error = new Error(errorData.message || errorData);
-        (error as any).status = response.status;
-        (error as any).headers = response.headers;
-        throw error;
-      }
-
       // Get response data
-      let data: any;
-      const contentType = response.headers.get("content-type") || "";
-
-      if (contentType.includes("application/json")) {
-        try {
-          data = await response.json();
-        } catch {
-          data = await response.text();
-        }
-      } else {
-        data = await response.text();
-      }
+      const data = await this.parseResponseBody(response);
 
       // Prepare response headers
       const responseHeaders: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
+      Object.entries(response.headers).forEach(([key, value]) => {
+        if (typeof value === "string") {
+          responseHeaders[key] = value;
+        }
       });
 
       const requestResponse: RequestResponse = {
@@ -292,14 +318,19 @@ class RequestService {
       }
 
       return requestResponse;
-    } catch (error) {
+    } catch (error: unknown) {
       const endTime = Date.now();
       console.error("Request execution error:", error);
+      const err = error as Error & {
+        status?: number;
+        message?: string;
+        headers?: Headers | Record<string, string>;
+      };
       throw {
-        status: error?.status || 0,
-        statusText: error?.message || "Network Error",
-        headers: error?.headers || {},
-        data: error instanceof Error ? error.message : "Unknown error",
+        status: typeof err.status === "number" ? err.status : 0,
+        statusText: typeof err.message === "string" ? err.message : "Network Error",
+        headers: err.headers || {},
+        data: err instanceof Error ? err.message : "Unknown error",
         time: endTime - startTime,
         size: 0,
         testResults: [],
@@ -307,7 +338,7 @@ class RequestService {
     }
   }
 
-  private calculateSize(data: any): number {
+  private calculateSize(data: unknown): number {
     if (typeof data === "string") {
       return new Blob([data]).size;
     }
@@ -343,7 +374,20 @@ class RequestService {
     return processedUrl;
   }
 
-  async executeScript(script: string, context: any = {}): Promise<any> {
+  async executeScript(
+    script: string,
+    context: {
+      environments?: Environment[];
+      variables?: Record<string, string>;
+      request?: HttpRequest;
+      response?: RequestResponse;
+      updateEnvironmentVariable?: (
+        key: string,
+        value: string,
+        environmentName?: string
+      ) => void;
+    } = {}
+  ): Promise<unknown> {
     try {
       // Create a sandboxed execution context
       const func = new Function("pm", "response", "environments", script);
@@ -362,36 +406,36 @@ class RequestService {
             };
           }
         },
-        expect: (actual: any) => ({
+        expect: (actual: unknown) => ({
           to: {
-            equal: (expected: any) => {
+            equal: (expected: unknown) => {
               if (actual !== expected) {
                 throw new Error(`Expected ${expected} but got ${actual}`);
               }
             },
             have: {
               status: (expected: number) => {
-                if (context.response?.status !== expected) {
+                const resp = context.response;
+                if (resp?.status !== expected) {
                   throw new Error(
-                    `Expected status ${expected} but got ${context.response?.status}`
+                    `Expected status ${expected} but got ${resp?.status}`
                   );
                 }
               },
             },
           },
         }),
-        response: context.response
-          ? {
-              status: context.response.status,
-              headers: context.response.headers,
-              data: context.response.data,
-              json: () => context.response.data,
-              text: () =>
-                typeof context.response.data === "string"
-                  ? context.response.data
-                  : JSON.stringify(context.response.data),
-            }
-          : undefined,
+        response: (() => {
+          const resp = context.response;
+          if (!resp) return undefined;
+          return {
+            status: resp.status,
+            headers: resp.headers,
+            data: resp.data,
+            json: () => resp.data,
+            text: () => (typeof resp.data === "string" ? resp.data : JSON.stringify(resp.data)),
+          };
+        })(),
         environment: {
           get: (key: string) => {
             const value = context.variables?.[key];
@@ -432,7 +476,17 @@ class RequestService {
 
   async executeTests(
     testScript: string,
-    context: any = {}
+    context: {
+      environments?: Environment[];
+      variables?: Record<string, string>;
+      request?: HttpRequest;
+      response?: RequestResponse;
+      updateEnvironmentVariable?: (
+        key: string,
+        value: string,
+        environmentName?: string
+      ) => void;
+    } = {}
   ): Promise<TestResult[]> {
     const testResults: TestResult[] = [];
 
@@ -454,36 +508,36 @@ class RequestService {
             });
           }
         },
-        expect: (actual: any) => ({
+        expect: (actual: unknown) => ({
           to: {
-            equal: (expected: any) => {
+            equal: (expected: unknown) => {
               if (actual !== expected) {
                 throw new Error(`Expected ${expected} but got ${actual}`);
               }
             },
             have: {
               status: (expected: number) => {
-                if (context.response?.status !== expected) {
+                const resp = context.response;
+                if (resp?.status !== expected) {
                   throw new Error(
-                    `Expected status ${expected} but got ${context.response?.status}`
+                    `Expected status ${expected} but got ${resp?.status}`
                   );
                 }
               },
               property: (prop: string) => {
-                if (
-                  typeof context.response?.data !== "object" ||
-                  !(prop in context.response.data)
-                ) {
+                const resp = context.response;
+                if (!resp || typeof resp.data !== "object" || resp.data === null || !(prop in (resp.data as Record<string, unknown>))) {
                   throw new Error(
                     `Expected response to have property '${prop}'`
                   );
                 }
                 return {
                   that: {
-                    equals: (expected: any) => {
-                      if (context.response.data[prop] !== expected) {
+                    equals: (expected: unknown) => {
+                      const dataObj = resp.data as Record<string, unknown>;
+                      if (dataObj[prop] !== expected) {
                         throw new Error(
-                          `Expected property '${prop}' to equal ${expected} but got ${context.response.data[prop]}`
+                          `Expected property '${prop}' to equal ${expected} but got ${dataObj[prop]}`
                         );
                       }
                     },
@@ -493,46 +547,43 @@ class RequestService {
             },
             be: {
               ok: () => {
-                if (
-                  context.response?.status < 200 ||
-                  context.response?.status >= 300
-                ) {
+                const resp = context.response;
+                if (!resp || resp.status < 200 || resp.status >= 300) {
                   throw new Error(
-                    `Expected response to be ok but got status ${context.response?.status}`
+                    `Expected response to be ok but got status ${resp?.status}`
                   );
                 }
               },
             },
           },
         }),
-        response: {
-          status: context.response?.status,
-          headers: context.response?.headers,
-          data: context.response?.data,
-          json: () => context.response?.data,
-          text: () =>
-            typeof context.response?.data === "string"
-              ? context.response?.data
-              : JSON.stringify(context.response?.data),
-          to: {
-            have: {
-              status: (expected: number) => {
-                if (context.response?.status !== expected) {
-                  throw new Error(
-                    `Expected status ${expected} but got ${context.response?.status}`
-                  );
-                }
-              },
-              jsonBody: () => {
-                const contentType =
-                  context.response?.headers["content-type"] || "";
-                if (!contentType.includes("application/json")) {
-                  throw new Error("Expected response to have JSON body");
-                }
+        response: (() => {
+          const resp = context.response;
+          return {
+            status: resp?.status,
+            headers: resp?.headers,
+            data: resp?.data,
+            json: () => resp?.data,
+            text: () => (typeof resp?.data === "string" ? (resp?.data as string) : JSON.stringify(resp?.data)),
+            to: {
+              have: {
+                status: (expected: number) => {
+                  if (resp?.status !== expected) {
+                    throw new Error(
+                      `Expected status ${expected} but got ${resp?.status}`
+                    );
+                  }
+                },
+                jsonBody: () => {
+                  const contentType = (resp?.headers as Record<string, string> | undefined)?.["content-type"] || "";
+                  if (!contentType.includes("application/json")) {
+                    throw new Error("Expected response to have JSON body");
+                  }
+                },
               },
             },
-          },
-        },
+          };
+        })(),
         environment: {
           get: (key: string) => {
             const value = context.variables?.[key];

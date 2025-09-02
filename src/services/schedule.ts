@@ -14,6 +14,107 @@ class ScheduleService {
     value: string
   ) => void;
 
+  private nowIso(): string {
+    return new Date().toISOString();
+  }
+
+  private updateActiveEnvironmentLocal(
+    environmentId: string,
+    key: string,
+    value: string
+  ): void {
+    this.activeEnvironments = this.activeEnvironments.map((env) => {
+      if (env._id === environmentId) {
+        return {
+          ...env,
+          variables: {
+            ...env.variables,
+            [key]: value,
+          },
+        };
+      }
+      return env;
+    });
+  }
+
+  private buildOnEnvironmentUpdateCallback() {
+    return (environmentId: string, key: string, value: string) => {
+      console.log(
+        `[Schedule] Updating environment variable: ${key} = ${value} in environment ${environmentId}`
+      );
+      this.updateActiveEnvironmentLocal(environmentId, key, value);
+      if (this.onEnvironmentUpdate) {
+        this.onEnvironmentUpdate(environmentId, key, value);
+      }
+    };
+  }
+
+  private computeOverallStatus(successful: number, failed: number): "success" | "error" | "partial" {
+    if (failed === 0) return "success";
+    if (successful > 0) return "partial";
+    return "error";
+  }
+
+  private async executeCollection(
+    collectionId: string,
+    onEnvironmentUpdate: (environmentId: string, key: string, value: string) => void,
+    execution: ScheduleExecution
+  ) {
+    const collectionExecution = {
+      id: collectionId,
+      name: "loading...",
+      status: "success" as "success" | "error",
+      requests: [] as Array<{
+        id: string;
+        name: string;
+        status: "success" | "error";
+        error?: string;
+        responseTime: number;
+      }>,
+    };
+
+    try {
+      const collectionDetails = await apiService.getCollectionById(collectionId);
+      collectionExecution.name = collectionDetails.name;
+
+      for (const request of collectionDetails.requests) {
+        execution.totalRequests++;
+        const requestStartTime = Date.now();
+        try {
+          await requestService.executeRequest(
+            request,
+            this.activeEnvironments,
+            onEnvironmentUpdate
+          );
+          const responseTime = Date.now() - requestStartTime;
+          execution.successfulRequests++;
+          collectionExecution.requests.push({
+            id: request._id,
+            name: request.name,
+            status: "success",
+            responseTime,
+          });
+        } catch (error) {
+          const responseTime = Date.now() - requestStartTime;
+          execution.failedRequests++;
+          collectionExecution.status = "error";
+          collectionExecution.requests.push({
+            id: request._id,
+            name: request.name,
+            status: "error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            responseTime,
+          });
+        }
+      }
+    } catch (error) {
+      collectionExecution.status = "error";
+      console.error(`Error loading collection ${collectionId}:`, error);
+    }
+
+    return collectionExecution;
+  }
+
   setActiveEnvironmentsForSchedule(environments: Environment[]) {
     this.activeEnvironments = environments;
   }
@@ -55,7 +156,7 @@ class ScheduleService {
   }
 
   async executeSchedule(schedule: Schedule): Promise<ScheduleExecution> {
-    const startTime = new Date().toISOString();
+    const startTime = this.nowIso();
     const execution: ScheduleExecution = {
       id: Date.now().toString(),
       scheduleId: schedule.id,
@@ -70,116 +171,28 @@ class ScheduleService {
     };
 
     try {
-      // Create callback to update environment variables during schedule execution
-      const onEnvironmentUpdate = (
-        environmentId: string,
-        key: string,
-        value: string
-      ) => {
-        console.log(
-          `[Schedule] Updating environment variable: ${key} = ${value} in environment ${environmentId}`
-        );
-
-        // Update the local activeEnvironments array for this execution
-        this.activeEnvironments = this.activeEnvironments.map((env) => {
-          if (env._id === environmentId) {
-            return {
-              ...env,
-              variables: {
-                ...env.variables,
-                [key]: value,
-              },
-            };
-          }
-          return env;
-        });
-
-        // Also call the main environment update callback if available
-        if (this.onEnvironmentUpdate) {
-          this.onEnvironmentUpdate(environmentId, key, value);
-        }
-      };
+      const onEnvironmentUpdate = this.buildOnEnvironmentUpdateCallback();
 
       for (const collectionId of schedule.collections) {
-        const collectionExecution = {
-          id: collectionId,
-          name: "loading...",
-          status: "success" as "success" | "error",
-          requests: [] as Array<{
-            id: string;
-            name: string;
-            status: "success" | "error";
-            error?: string;
-            responseTime: number;
-          }>,
-        };
-
-        try {
-          // Get collection details with requests
-          const collectionDetails = await apiService.getCollectionById(
-            collectionId
-          );
-          // Rename name on collectionExecution
-          collectionExecution.name = collectionDetails.name;
-
-          // Execute all requests in the collection
-          for (const request of collectionDetails.requests) {
-            execution.totalRequests++;
-            const requestStartTime = Date.now();
-
-            try {
-              // Pass the environment update callback to the request service
-              await requestService.executeRequest(
-                request,
-                this.activeEnvironments, // Use the updated environments
-                onEnvironmentUpdate
-              );
-              const responseTime = Date.now() - requestStartTime;
-
-              execution.successfulRequests++;
-              collectionExecution.requests.push({
-                id: request._id,
-                name: request.name,
-                status: "success",
-                responseTime,
-              });
-            } catch (error) {
-              const responseTime = Date.now() - requestStartTime;
-              execution.failedRequests++;
-              collectionExecution.status = "error";
-
-              collectionExecution.requests.push({
-                id: request._id,
-                name: request.name,
-                status: "error",
-                error: error instanceof Error ? error.message : "Unknown error",
-                responseTime,
-              });
-            }
-          }
-        } catch (error) {
-          collectionExecution.status = "error";
-          console.error(`Error loading collection ${collectionId}:`, error);
-        }
-
+        const collectionExecution = await this.executeCollection(
+          collectionId,
+          onEnvironmentUpdate,
+          execution
+        );
         execution.collections.push(collectionExecution);
       }
 
-      // Determine overall status
-      if (execution.failedRequests === 0) {
-        execution.status = "success";
-      } else if (execution.successfulRequests > 0) {
-        execution.status = "partial";
-      } else {
-        execution.status = "error";
-      }
+      execution.status = this.computeOverallStatus(
+        execution.successfulRequests,
+        execution.failedRequests
+      );
     } catch (error) {
       execution.status = "error";
       execution.error =
         error instanceof Error ? error.message : "Unknown error";
     }
 
-    execution.endTime = new Date().toISOString();
+    execution.endTime = this.nowIso();
 
     // Update schedule with last run info
     const updatedSchedule = {
@@ -187,7 +200,7 @@ class ScheduleService {
       lastRun: execution.endTime,
       lastResult: execution.status,
       lastError: execution.error,
-      updatedAt: new Date().toISOString(),
+      updatedAt: this.nowIso(),
     };
     storageService.saveSchedule(updatedSchedule);
 
