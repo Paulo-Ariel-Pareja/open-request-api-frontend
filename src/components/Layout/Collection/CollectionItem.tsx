@@ -81,7 +81,11 @@ export function CollectionItem({
                 {collection.name}
               </div>
               <div className="text-xs text-gray-400 truncate">
-                {collection.description || "No description"}
+                {collection.description
+                  ? collection.description.length > 50
+                    ? collection.description.slice(0, 50) + "..."
+                    : collection.description
+                  : "No description"}
               </div>
               <div className="text-gray-400 text-xs">
                 {collection.size} requests
