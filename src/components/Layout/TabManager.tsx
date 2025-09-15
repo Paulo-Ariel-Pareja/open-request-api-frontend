@@ -185,7 +185,7 @@ export function TabManager() {
 
           <button
             onClick={createNewTab}
-            className="p-3 text-gray-400 hover:text-white hover:bg-gray-700 border-l border-gray-700 flex-shrink-0"
+            className="p-3 text-white bg-purple-500 hover:text-white hover:bg-purple-600 border-l border-gray-700 flex-shrink-0"
             title="New tab"
           >
             <Plus size={16} />
