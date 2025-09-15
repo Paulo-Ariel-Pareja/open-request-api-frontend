@@ -1,18 +1,21 @@
 import { AppProvider } from './contexts/AppContext';
+import { TabProvider } from './contexts/TabContext';
 import { Header } from './components/Layout/Header';
 import { Sidebar } from './components/Layout/Sidebar';
-import { RequestBuilder } from './components/Request/RequestBuilder';
+import { TabManager } from './components/Layout/TabManager';
 
 function App() {
   return (
     <AppProvider>
-      <div className="h-screen flex flex-col bg-gray-900">
-        <Header />
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar />
-          <RequestBuilder />
+      <TabProvider>
+        <div className="h-screen flex flex-col bg-gray-900 flex-container-constrained">
+          <Header />
+          <div className="flex-1 flex overflow-hidden min-w-0">
+            <Sidebar />
+            <TabManager />
+          </div>
         </div>
-      </div>
+      </TabProvider>
     </AppProvider>
   );
 }

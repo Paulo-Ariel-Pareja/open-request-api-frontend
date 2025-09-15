@@ -10,6 +10,8 @@
 ```
     ✅ Codigo a la vista: Puedes ver que hace, no hay nada oculto.
 
+    ✅ Manejo de tabs: Puedes abrir variros request al mismo tiempo.
+
     ⚡ Comparte al instante: Al guardar un request o una variable de entorno ya estas compartiendo con el  resto de tu equipo!
 
     ⚡ Evita conflictos: Ejecutar codigo JS antes y despues de cada request y guardar esa informacion en las variables de entorno, pero estas no se compartiran, seran solo accesible por ti hasta que recargues el navegador.

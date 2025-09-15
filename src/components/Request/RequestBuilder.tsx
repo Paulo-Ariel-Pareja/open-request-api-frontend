@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Send,
   Save,
@@ -39,15 +39,30 @@ interface FormField {
 
 
 
-export function RequestBuilder() {
+interface RequestBuilderProps {
+  tabId?: string;
+  initialRequest?: HttpRequest | null;
+  onRequestChange?: (request: HttpRequest | null) => void;
+}
+
+export function RequestBuilder({ 
+  tabId, 
+  initialRequest, 
+  onRequestChange 
+}: RequestBuilderProps = {}) {
   const {
-    activeRequest,
-    setActiveRequest,
+    activeRequest: globalActiveRequest,
+    setActiveRequest: setGlobalActiveRequest,
     activeEnvironments,
     updateRequest,
     saveRequest,
     updateEnvironmentVariable,
   } = useApp();
+
+  // Use props if provided, otherwise fall back to global state
+  const isTabMode = tabId !== undefined;
+  const activeRequest = isTabMode ? null : globalActiveRequest; // In tab mode, don't use global state
+  const setActiveRequest = setGlobalActiveRequest;
 
   const [request, setRequest] = useState<HttpRequest | null>(null);
   const [response, setResponse] = useState<RequestResponse | null>(null);
@@ -92,28 +107,32 @@ export function RequestBuilder() {
     { id: "tests", label: "Test Results" },
   ], []);
 
+  // Handle initial request loading (both global and tab mode)
   useEffect(() => {
-    if (activeRequest) {
-      const requestCopy = JSON.parse(JSON.stringify(activeRequest));
+    const requestToLoad = isTabMode ? initialRequest : activeRequest;
+    
+    if (requestToLoad) {
+      const requestCopy = JSON.parse(JSON.stringify(requestToLoad));
       setRequest(requestCopy);
       setResponse(null);
 
       // Extract collection ID
-      const collectionIdMatch = activeRequest._id.match(/^(.+)_req_/);
+      const collectionIdMatch = requestToLoad._id.match(/^(.+)_req_/);
       setCollectionId(collectionIdMatch ? collectionIdMatch[1] : null);
 
       // Parse URL parameters, headers, and path variables
-      setParams(parseUrlParams(activeRequest.url || ""));
-      setHeaders(parseHeaders(activeRequest.headers));
+      setParams(parseUrlParams(requestToLoad.url || ""));
+      setHeaders(parseHeaders(requestToLoad.headers));
       
-      const storedPathVars = activeRequest.pathVariables || {};
-      const pathVars = extractPathVariables(activeRequest.url || "");
+      const storedPathVars = requestToLoad.pathVariables || {};
+      const pathVars = extractPathVariables(requestToLoad.url || "");
       const mergedPathVars = pathVars.map((pathVar) => ({
         key: pathVar.key,
         value: storedPathVars[pathVar.key] || pathVar.value,
       }));
       setPathVariables(mergedPathVars);
-    } else {
+    } else if (!isTabMode) {
+      // Only reset when not in tab mode
       setRequest(null);
       setResponse(null);
       setParams([{ key: "", value: "", enabled: true }]);
@@ -121,7 +140,20 @@ export function RequestBuilder() {
       setPathVariables([]);
       setCollectionId(null);
     }
-  }, [activeRequest, setParams, setHeaders]);
+  }, [isTabMode ? initialRequest : activeRequest, setParams, setHeaders, isTabMode]);
+
+  // Notify parent component about request changes when in tab mode
+  const lastNotifiedRequest = useRef<string>('');
+  
+  useEffect(() => {
+    if (onRequestChange && request && isTabMode) {
+      const requestString = JSON.stringify(request);
+      if (requestString !== lastNotifiedRequest.current) {
+        lastNotifiedRequest.current = requestString;
+        onRequestChange(request);
+      }
+    }
+  }, [request, onRequestChange, isTabMode]);
 
   const handleSave = useCallback(async () => {
     if (!request) return;
