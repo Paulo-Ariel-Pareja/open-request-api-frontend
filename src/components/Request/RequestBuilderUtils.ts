@@ -17,7 +17,9 @@ export const parseUrlParams = (url: string): KeyValuePair[] => {
     urlObj.searchParams.forEach((value, key) => {
       urlParams.push({ key, value, enabled: true });
     });
-    return urlParams.length > 0 ? urlParams : [{ key: "", value: "", enabled: true }];
+    return urlParams.length > 0
+      ? urlParams
+      : [{ key: "", value: "", enabled: true }];
   } catch {
     const parts = url.split("?");
     if (parts.length > 1) {
@@ -36,13 +38,17 @@ export const parseUrlParams = (url: string): KeyValuePair[] => {
   }
 };
 
-export const parseHeaders = (headers: Record<string, string> = {}): KeyValuePair[] => {
+export const parseHeaders = (
+  headers: Record<string, string> = {}
+): KeyValuePair[] => {
   const headerPairs = Object.entries(headers).map(([key, value]) => ({
     key,
     value,
     enabled: true,
   }));
-  return headerPairs.length > 0 ? headerPairs : [{ key: "", value: "", enabled: true }];
+  return headerPairs.length > 0
+    ? headerPairs
+    : [{ key: "", value: "", enabled: true }];
 };
 
 export const extractPathVariables = (url: string): PathVariable[] => {
@@ -54,17 +60,23 @@ export const extractPathVariables = (url: string): PathVariable[] => {
   }));
 };
 
-export const replaceVariables = (text: string, variables: Record<string, string>): string => {
+export const replaceVariables = (
+  text: string,
+  variables: Record<string, string>
+): string => {
   return text.replace(/\{\{([\w-]+)\}\}/g, (match, varName) => {
     return variables[varName] !== undefined ? variables[varName] : match;
   });
 };
 
-export const buildUrlWithParams = (baseUrl: string, params: KeyValuePair[]): string => {
+export const buildUrlWithParams = (
+  baseUrl: string,
+  params: KeyValuePair[]
+): string => {
   const enabledParams = params.filter((p) => p.enabled && p.key.trim());
-  
+
   if (enabledParams.length === 0) return baseUrl;
-  
+
   try {
     const url = new URL(baseUrl || "http://example.com");
     url.search = "";
@@ -75,14 +87,26 @@ export const buildUrlWithParams = (baseUrl: string, params: KeyValuePair[]): str
     });
     return url.toString();
   } catch {
+    const [urlBase, queryString] = baseUrl.split("?");
+    const existingParams = new URLSearchParams(queryString || "");
+    enabledParams.forEach((p) => {
+      existingParams.delete(p.key);
+    });
+    const cleanedQuery = existingParams.toString();
     const paramString = enabledParams
       .map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`)
       .join("&");
-    return baseUrl + (baseUrl.includes("?") ? "&" : "?") + paramString;
+    let finalUrl = urlBase;
+    if (cleanedQuery || paramString) {
+      finalUrl += "?" + [cleanedQuery, paramString].filter(Boolean).join("&");
+    }
+    return finalUrl;
   }
 };
 
-export const buildHeadersFromPairs = (headerPairs: KeyValuePair[]): Record<string, string> => {
+export const buildHeadersFromPairs = (
+  headerPairs: KeyValuePair[]
+): Record<string, string> => {
   const finalHeaders: Record<string, string> = {};
   headerPairs
     .filter((h) => h.enabled && h.key.trim())
