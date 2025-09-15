@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Search, Upload } from "lucide-react";
 import { useApp } from "../../../contexts/AppContext";
+import { useTabs } from "../../../contexts/TabContext";
 import { Collection } from "../../../types";
 import { CollectionItem } from "./CollectionItem";
 import { CollectionModal } from "./CollectionModal";
@@ -11,12 +12,13 @@ export function CollectionTab() {
     collections,
     collectionsLoading,
     loadCollectionDetails,
-    setActiveRequest,
     deleteCollection,
     deleteRequest,
     searchCollections,
     importPmCollection,
   } = useApp();
+  
+  const { openRequestInActiveTab } = useTabs();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Collection[]>([]);
   const [showNewCollectionForm, setShowNewCollectionForm] = useState(false);
@@ -149,7 +151,7 @@ export function CollectionTab() {
                 onToggle={() => toggleCollection(collection._id)}
                 onAddRequest={() => setShowNewRequestForm(collection._id)}
                 onDeleteCollection={() => deleteCollection(collection._id)}
-                onSelectRequest={setActiveRequest}
+                onSelectRequest={openRequestInActiveTab}
                 onDeleteRequest={deleteRequest}
               />
             ))}

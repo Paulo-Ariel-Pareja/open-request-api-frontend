@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../../../contexts/AppContext";
+import { useTabs } from "../../../contexts/TabContext";
 import {
   ChevronDown,
   ChevronRight,
@@ -8,6 +9,7 @@ import {
   MoreVertical,
   Plus,
   Trash2,
+  ExternalLink,
 } from "lucide-react";
 import { HttpRequest, Collection } from "../../../types";
 import { CollectionModal } from "./CollectionModal";
@@ -36,8 +38,10 @@ export function CollectionItem({
     loadCollectionDetails,
     //  updateCollection
   } = useApp();
+  
+  const { openRequestInNewTab } = useTabs();
   const [showMenu, setShowMenu] = useState(false);
-
+  const [showRequestMenu, setShowRequestMenu] = useState<string | null>(null);
   const [showEditCollection, setShowEditCollection] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(
     null
@@ -53,6 +57,19 @@ export function CollectionItem({
       loadCollectionDetails(collection._id);
     }
   }, [expanded, details, collection._id, loadCollectionDetails]);
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowMenu(false);
+      setShowRequestMenu(null);
+    };
+
+    if (showMenu || showRequestMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showMenu, showRequestMenu]);
 
   const handleEditCollection = (collection: Collection) => {
     setEditingCollection(collection);
@@ -146,8 +163,12 @@ export function CollectionItem({
             {details.requests.map((request) => (
               <div
                 key={request._id}
-                className="flex items-center justify-between p-2 hover:bg-gray-700 rounded group cursor-pointer"
+                className="flex items-center justify-between p-2 hover:bg-gray-700 rounded group cursor-pointer relative"
                 onClick={() => onSelectRequest(request)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setShowRequestMenu(showRequestMenu === request._id ? null : request._id);
+                }}
               >
                 <div className="flex items-center space-x-2">
                   <span
@@ -167,15 +188,64 @@ export function CollectionItem({
                   </span>
                   <span className="text-white text-sm">{request.name}</span>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteRequest(collection._id, request._id);
-                  }}
-                  className="p-1 text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 size={14} />
-                </button>
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowRequestMenu(showRequestMenu === request._id ? null : request._id);
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <MoreVertical size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteRequest(collection._id, request._id);
+                    }}
+                    className="p-1 text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                
+                {/* Request Context Menu */}
+                {showRequestMenu === request._id && (
+                  <div className="absolute right-0 top-8 bg-gray-700 border border-gray-600 rounded-lg shadow-lg z-20 min-w-[140px]">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectRequest(request);
+                        setShowRequestMenu(null);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-600 flex items-center space-x-2"
+                    >
+                      <span>Open in Current Tab</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openRequestInNewTab(request);
+                        setShowRequestMenu(null);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-600 flex items-center space-x-2"
+                    >
+                      <ExternalLink size={14} />
+                      <span>Open in New Tab</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteRequest(collection._id, request._id);
+                        setShowRequestMenu(null);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-gray-600 flex items-center space-x-2"
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -10,7 +10,7 @@ export function Sidebar() {
   if (sidebarCollapsed) return;
 
   return (
-    <div className="w-120 bg-gray-800 border-r border-gray-700 flex flex-col">
+    <div className="w-120 flex-shrink-0 bg-gray-800 border-r border-gray-700 flex flex-col">
       <div className="flex border-b border-gray-700">
         <button
           onClick={() => setActiveTab("collections")}
