@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { X, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { RequestBuilder } from "../Request/RequestBuilder";
 import { useTabs } from "../../contexts/TabContext";
+import { TabOptions } from "./TabOptions";
 
 export function TabManager() {
   const {
@@ -105,7 +106,7 @@ export function TabManager() {
   // Scroll active tab into view when it changes
   useEffect(() => {
     scrollActiveTabIntoView();
-  }, [activeTab]);
+  }, [activeTab, scrollActiveTabIntoView]);
 
   return (
     <div className="flex-1 flex flex-col bg-gray-900 min-w-0 max-w-full">
@@ -182,14 +183,16 @@ export function TabManager() {
             </button>
           )}
 
-
           <button
             onClick={createNewTab}
-            className="p-3 text-white bg-purple-500 hover:text-white hover:bg-purple-600 border-l border-gray-700 flex-shrink-0"
+            className="p-3 text-white bg-purple-500 hover:bg-purple-600 border-l border-gray-700 flex-shrink-0"
             title="New tab"
           >
             <Plus size={16} />
           </button>
+
+          {/* Tab Options */}
+          <TabOptions />
         </div>
       </div>
 

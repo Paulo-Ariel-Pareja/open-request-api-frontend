@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { HttpRequest } from '../types';
+import { tabStorage } from '../utils/tabStorage';
 
 interface Tab {
   id: string;
@@ -17,6 +18,8 @@ interface TabContextType {
   updateTabRequest: (tabId: string, request: HttpRequest | null) => void;
   openRequestInNewTab: (request: HttpRequest) => void;
   openRequestInActiveTab: (request: HttpRequest) => void;
+  clearAllTabs: () => void;
+  hasStoredTabs: boolean;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
@@ -26,14 +29,26 @@ interface TabProviderProps {
 }
 
 export function TabProvider({ children }: TabProviderProps) {
-  const [tabs, setTabs] = useState<Tab[]>([
-    {
-      id: 'tab-1',
-      name: 'New Request',
-      request: null,
-      isActive: true,
-    },
-  ]);
+  const [tabs, setTabs] = useState<Tab[]>(() => {
+    const storedTabs = tabStorage.loadTabs();
+    if (storedTabs && storedTabs.length > 0) {
+      return storedTabs;
+    }
+    return [
+      {
+        id: 'tab-1',
+        name: 'New Request',
+        request: null,
+        isActive: true,
+      },
+    ];
+  });
+
+  useEffect(() => {
+    tabStorage.saveTabs(tabs);
+  }, [tabs]);
+
+  const hasStoredTabs = tabStorage.hasStoredTabs();
 
   const activeTab = tabs.find(tab => tab.isActive);
 
@@ -56,7 +71,6 @@ export function TabProvider({ children }: TabProviderProps) {
     setTabs(prevTabs => {
       const filteredTabs = prevTabs.filter(tab => tab.id !== tabId);
       
-      // Si no quedan tabs, crear uno nuevo
       if (filteredTabs.length === 0) {
         return [{
           id: `tab-${Date.now()}`,
@@ -66,7 +80,6 @@ export function TabProvider({ children }: TabProviderProps) {
         }];
       }
 
-      // Si cerramos el tab activo, activar el último tab
       const closedTabWasActive = prevTabs.find(tab => tab.id === tabId)?.isActive;
       if (closedTabWasActive) {
         const lastTab = filteredTabs[filteredTabs.length - 1];
@@ -134,6 +147,18 @@ export function TabProvider({ children }: TabProviderProps) {
     );
   }, []);
 
+  const clearAllTabs = useCallback(() => {
+    tabStorage.clearTabs();
+    setTabs([
+      {
+        id: `tab-${Date.now()}`,
+        name: 'New Request',
+        request: null,
+        isActive: true,
+      },
+    ]);
+  }, []);
+
   return (
     <TabContext.Provider
       value={{
@@ -145,6 +170,8 @@ export function TabProvider({ children }: TabProviderProps) {
         updateTabRequest,
         openRequestInNewTab,
         openRequestInActiveTab,
+        clearAllTabs,
+        hasStoredTabs,
       }}
     >
       {children}
