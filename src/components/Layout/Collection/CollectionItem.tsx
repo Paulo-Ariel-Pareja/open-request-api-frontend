@@ -164,7 +164,7 @@ export function CollectionItem({
               <div
                 key={request._id}
                 className="flex items-center justify-between p-2 hover:bg-gray-700 rounded group cursor-pointer relative"
-                onClick={() => onSelectRequest(request)}
+                onClick={() => openRequestInNewTab(request)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setShowRequestMenu(showRequestMenu === request._id ? null : request._id);
