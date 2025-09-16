@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { HttpRequest } from '../types';
+import { tabStorage } from '../utils/tabStorage';
 
 interface Tab {
   id: string;
@@ -17,6 +18,8 @@ interface TabContextType {
   updateTabRequest: (tabId: string, request: HttpRequest | null) => void;
   openRequestInNewTab: (request: HttpRequest) => void;
   openRequestInActiveTab: (request: HttpRequest) => void;
+  clearAllTabs: () => void;
+  hasStoredTabs: boolean;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
@@ -26,14 +29,29 @@ interface TabProviderProps {
 }
 
 export function TabProvider({ children }: TabProviderProps) {
-  const [tabs, setTabs] = useState<Tab[]>([
-    {
-      id: 'tab-1',
-      name: 'New Request',
-      request: null,
-      isActive: true,
-    },
-  ]);
+  // Inicializar tabs desde localStorage o usar tab por defecto
+  const [tabs, setTabs] = useState<Tab[]>(() => {
+    const storedTabs = tabStorage.loadTabs();
+    if (storedTabs && storedTabs.length > 0) {
+      return storedTabs;
+    }
+    return [
+      {
+        id: 'tab-1',
+        name: 'New Request',
+        request: null,
+        isActive: true,
+      },
+    ];
+  });
+
+  // Guardar tabs en localStorage cada vez que cambien
+  useEffect(() => {
+    tabStorage.saveTabs(tabs);
+  }, [tabs]);
+
+  // Verificar si hay tabs almacenados
+  const hasStoredTabs = tabStorage.hasStoredTabs();
 
   const activeTab = tabs.find(tab => tab.isActive);
 
@@ -134,6 +152,18 @@ export function TabProvider({ children }: TabProviderProps) {
     );
   }, []);
 
+  const clearAllTabs = useCallback(() => {
+    tabStorage.clearTabs();
+    setTabs([
+      {
+        id: `tab-${Date.now()}`,
+        name: 'New Request',
+        request: null,
+        isActive: true,
+      },
+    ]);
+  }, []);
+
   return (
     <TabContext.Provider
       value={{
@@ -145,6 +175,8 @@ export function TabProvider({ children }: TabProviderProps) {
         updateTabRequest,
         openRequestInNewTab,
         openRequestInActiveTab,
+        clearAllTabs,
+        hasStoredTabs,
       }}
     >
       {children}

@@ -3,6 +3,7 @@ import { TabProvider } from './contexts/TabContext';
 import { Header } from './components/Layout/Header';
 import { Sidebar } from './components/Layout/Sidebar';
 import { TabManager } from './components/Layout/TabManager';
+import { TabRestoreNotification } from './components/Layout/TabRestoreNotification';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
             <Sidebar />
             <TabManager />
           </div>
+          <TabRestoreNotification />
         </div>
       </TabProvider>
     </AppProvider>
