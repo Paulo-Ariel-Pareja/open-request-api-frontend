@@ -29,7 +29,6 @@ interface TabProviderProps {
 }
 
 export function TabProvider({ children }: TabProviderProps) {
-  // Inicializar tabs desde localStorage o usar tab por defecto
   const [tabs, setTabs] = useState<Tab[]>(() => {
     const storedTabs = tabStorage.loadTabs();
     if (storedTabs && storedTabs.length > 0) {
@@ -45,12 +44,10 @@ export function TabProvider({ children }: TabProviderProps) {
     ];
   });
 
-  // Guardar tabs en localStorage cada vez que cambien
   useEffect(() => {
     tabStorage.saveTabs(tabs);
   }, [tabs]);
 
-  // Verificar si hay tabs almacenados
   const hasStoredTabs = tabStorage.hasStoredTabs();
 
   const activeTab = tabs.find(tab => tab.isActive);
@@ -74,7 +71,6 @@ export function TabProvider({ children }: TabProviderProps) {
     setTabs(prevTabs => {
       const filteredTabs = prevTabs.filter(tab => tab.id !== tabId);
       
-      // Si no quedan tabs, crear uno nuevo
       if (filteredTabs.length === 0) {
         return [{
           id: `tab-${Date.now()}`,
@@ -84,7 +80,6 @@ export function TabProvider({ children }: TabProviderProps) {
         }];
       }
 
-      // Si cerramos el tab activo, activar el último tab
       const closedTabWasActive = prevTabs.find(tab => tab.id === tabId)?.isActive;
       if (closedTabWasActive) {
         const lastTab = filteredTabs[filteredTabs.length - 1];

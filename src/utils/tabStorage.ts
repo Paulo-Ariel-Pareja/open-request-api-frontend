@@ -17,7 +17,6 @@ interface StoredTabsData {
 }
 
 export const tabStorage = {
-  // Guardar tabs en localStorage
   saveTabs: (tabs: Tab[]): void => {
     try {
       const data: StoredTabsData = {
@@ -31,7 +30,6 @@ export const tabStorage = {
     }
   },
 
-  // Cargar tabs desde localStorage
   loadTabs: (): Tab[] | null => {
     try {
       const stored = localStorage.getItem(TABS_STORAGE_KEY);
@@ -39,14 +37,12 @@ export const tabStorage = {
 
       const data: StoredTabsData = JSON.parse(stored);
       
-      // Verificar versión y validez de los datos
       if (data.version !== STORAGE_VERSION || !Array.isArray(data.tabs)) {
         console.warn('Invalid or outdated tabs data, clearing storage');
         tabStorage.clearTabs();
         return null;
       }
 
-      // Verificar que los datos no sean muy antiguos (más de 30 días)
       const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
       if (data.timestamp < thirtyDaysAgo) {
         console.info('Tabs data is too old, clearing storage');
@@ -54,7 +50,6 @@ export const tabStorage = {
         return null;
       }
 
-      // Validar estructura de tabs
       const validTabs = data.tabs.filter(tab => 
         tab && 
         typeof tab.id === 'string' && 
@@ -66,7 +61,6 @@ export const tabStorage = {
         return null;
       }
 
-      // Asegurar que solo un tab esté activo
       let hasActiveTab = false;
       const normalizedTabs = validTabs.map((tab, index) => {
         if (tab.isActive && !hasActiveTab) {
@@ -89,7 +83,6 @@ export const tabStorage = {
     }
   },
 
-  // Limpiar tabs del localStorage
   clearTabs: (): void => {
     try {
       localStorage.removeItem(TABS_STORAGE_KEY);
@@ -98,7 +91,6 @@ export const tabStorage = {
     }
   },
 
-  // Verificar si hay tabs guardados
   hasStoredTabs: (): boolean => {
     try {
       return localStorage.getItem(TABS_STORAGE_KEY) !== null;
